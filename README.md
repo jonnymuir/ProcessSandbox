@@ -104,7 +104,7 @@ var config = new ProcessPoolConfiguration
 var config = new ProcessPoolConfiguration
 {
     Use32BitWorker = true,
-    MaxMemoryMB = 1024,  // 32-bit limit
+    MaxMemoryMB = 1024,  // well within 32-bit limit
     MaxGdiHandles = 10000
 };
 ```
@@ -195,6 +195,6 @@ MIT License - see [LICENSE](./LICENSE) for details.
 
 ## Support
 
-- 🐛 [Report issues](https://github.com/yourusername/ProcessSandbox/issues)
-- 💬 [Discussions](https://github.com/yourusername/ProcessSandbox/discussions)
-- 📧 Email: your@email.com
+- 🐛 [Report issues](https://github.com/jonnymuir/ProcessSandbox/issues)
+- 💬 [Discussions](https://github.com/jonnymuir/ProcessSandbox/discussions)
+- 📧 Email: jonnypmuir@gmail.com
