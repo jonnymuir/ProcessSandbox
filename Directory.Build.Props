@@ -7,15 +7,15 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     
     <!-- Package Information -->
-    <Authors>Your Name</Authors>
-    <Company>Your Company</Company>
+    <Authors>Jonny Muir</Authors>
+    <Company>jonnymuir.com</Company>
     <Copyright>Copyright © $(Company) $([System.DateTime]::Now.Year)</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageProjectUrl>https://github.com/yourusername/ProcessSandbox</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/yourusername/ProcessSandbox.git</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/jonnymuir/ProcessSandbox</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/jonnymuir/ProcessSandbox.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageTags>process;isolation;sandbox;interop;com;native;unmanaged;proxy</PackageTags>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <!--<PackageReadmeFile>README.md</PackageReadmeFile>-->
     <!--<PackageIcon>icon.png</PackageIcon>-->
     
     <!-- Version -->
