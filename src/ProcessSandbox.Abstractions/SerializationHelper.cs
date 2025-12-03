@@ -18,7 +18,7 @@ namespace ProcessSandbox.Abstractions
         public static byte[][] SerializeParameters(object?[] parameters)
         {
             if (parameters == null || parameters.Length == 0)
-                return Array.Empty<byte[]>();
+                return [];
 
             var result = new byte[parameters.Length][];
             for (int i = 0; i < parameters.Length; i++)
@@ -38,7 +38,7 @@ namespace ProcessSandbox.Abstractions
         public static object?[] DeserializeParameters(byte[][] serializedParameters, Type[] parameterTypes)
         {
             if (serializedParameters == null || serializedParameters.Length == 0)
-                return Array.Empty<object>();
+                return [];
 
             if (parameterTypes.Length != serializedParameters.Length)
                 throw new ArgumentException("Parameter count mismatch");
@@ -87,7 +87,7 @@ namespace ProcessSandbox.Abstractions
         public static string[] GetTypeNames(Type[] types)
         {
             if (types == null || types.Length == 0)
-                return Array.Empty<string>();
+                return [];
 
             return types.Select(t => t.AssemblyQualifiedName ?? t.FullName ?? t.Name).ToArray();
         }
@@ -100,7 +100,7 @@ namespace ProcessSandbox.Abstractions
         public static Type[] ResolveTypes(string[] typeNames)
         {
             if (typeNames == null || typeNames.Length == 0)
-                return Array.Empty<Type>();
+                return [];
 
             var types = new List<Type>();
             foreach (var typeName in typeNames)

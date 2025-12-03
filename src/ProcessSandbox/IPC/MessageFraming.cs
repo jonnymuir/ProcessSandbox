@@ -27,18 +27,13 @@ namespace ProcessSandbox.IPC
             byte[] message, 
             CancellationToken cancellationToken = default)
         {
-            if (stream == null)
-                throw new ArgumentNullException(nameof(stream));
-            if (message == null)
-                throw new ArgumentNullException(nameof(message));
-
             // Write length prefix
             var lengthBytes = BitConverter.GetBytes(message.Length);
-            await stream.WriteAsync(lengthBytes, 0, lengthBytes.Length, cancellationToken)
+            await stream.WriteAsync(lengthBytes, cancellationToken)
                 .ConfigureAwait(false);
 
             // Write message
-            await stream.WriteAsync(message, 0, message.Length, cancellationToken)
+            await stream.WriteAsync(message, cancellationToken)
                 .ConfigureAwait(false);
 
             await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
@@ -54,9 +49,6 @@ namespace ProcessSandbox.IPC
             Stream stream, 
             CancellationToken cancellationToken = default)
         {
-            if (stream == null)
-                throw new ArgumentNullException(nameof(stream));
-
             // Read length prefix
             var lengthBuffer = new byte[LengthPrefixSize];
             var bytesRead = await ReadExactlyAsync(
@@ -84,7 +76,7 @@ namespace ProcessSandbox.IPC
                     $"Message too large: {messageLength} bytes (max: {MaxMessageSize})");
 
             if (messageLength == 0)
-                return Array.Empty<byte>();
+                return [];
 
             // Read message
             var messageBuffer = new byte[messageLength];
@@ -195,7 +187,7 @@ namespace ProcessSandbox.IPC
                     $"Message too large: {messageLength} bytes (max: {MaxMessageSize})");
 
             if (messageLength == 0)
-                return Array.Empty<byte>();
+                return [];
 
             // Read message
             var messageBuffer = new byte[messageLength];

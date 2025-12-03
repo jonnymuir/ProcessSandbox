@@ -25,13 +25,13 @@ namespace ProcessSandbox.Abstractions.Messages
         /// Full type names of the method parameters for overload resolution.
         /// </summary>
         [Key(2)]
-        public string[] ParameterTypeNames { get; set; } = Array.Empty<string>();
+        public string[] ParameterTypeNames { get; set; } = [];
 
         /// <summary>
         /// Serialized parameter values.
         /// </summary>
         [Key(3)]
-        public byte[][] SerializedParameters { get; set; } = Array.Empty<byte[]>();
+        public byte[][] SerializedParameters { get; set; } = [];
 
         /// <summary>
         /// Timeout for the method execution in milliseconds.

@@ -19,7 +19,7 @@ namespace ProcessSandbox.Abstractions.Messages
         /// Serialized message payload.
         /// </summary>
         [Key(1)]
-        public byte[] Payload { get; set; } = Array.Empty<byte>();
+        public byte[] Payload { get; set; } = [];
 
         /// <summary>
         /// Timestamp when the message was created.
@@ -86,7 +86,7 @@ namespace ProcessSandbox.Abstractions.Messages
         /// <returns>A new shutdown IPC message.</returns>
         public static IpcMessage CreateShutdown()
         {
-            return new IpcMessage(MessageType.Shutdown, Array.Empty<byte>());
+            return new IpcMessage(MessageType.Shutdown, []);
         }
 
         /// <summary>
@@ -95,7 +95,7 @@ namespace ProcessSandbox.Abstractions.Messages
         /// <returns>A new ping IPC message.</returns>
         public static IpcMessage CreatePing()
         {
-            return new IpcMessage(MessageType.Ping, Array.Empty<byte>());
+            return new IpcMessage(MessageType.Ping, []);
         }
 
         /// <summary>
@@ -104,7 +104,7 @@ namespace ProcessSandbox.Abstractions.Messages
         /// <returns>A new pong IPC message.</returns>
         public static IpcMessage CreatePong()
         {
-            return new IpcMessage(MessageType.Pong, Array.Empty<byte>());
+            return new IpcMessage(MessageType.Pong, []);
         }
 
         /// <summary>

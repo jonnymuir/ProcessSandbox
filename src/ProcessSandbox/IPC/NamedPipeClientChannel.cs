@@ -11,11 +11,14 @@ namespace ProcessSandbox.IPC
     /// <summary>
     /// Named pipe client channel for connecting to worker processes.
     /// </summary>
-    public class NamedPipeClientChannel : IIpcChannel
+    /// <remarks>
+    /// Creates a new named pipe client channel.
+    /// </remarks>
+    /// <param name="pipeName">The name of the pipe to connect to.</param>
+    /// <param name="serverName">The server name (use "." for local machine).</param>
+    public class NamedPipeClientChannel(string pipeName, string serverName = ".") : IIpcChannel
     {
-        private readonly string _pipeName;
-        private readonly string _serverName;
-        private readonly SemaphoreSlim _sendLock;
+        private readonly SemaphoreSlim _sendLock = new(1, 1);
         private NamedPipeClientStream? _pipeClient;
         private bool _disposed;
         private volatile bool _isConnected;
@@ -24,29 +27,16 @@ namespace ProcessSandbox.IPC
         /// Gets whether the channel is connected.
         /// </summary>
         public bool IsConnected => _isConnected && _pipeClient?.IsConnected == true;
-        
+
         /// <summary>
         /// Gets the channel ID.
         /// </summary>
-        public string ChannelId { get; }
+        public string ChannelId { get; } = $"{serverName}\\{pipeName}";
 
         /// <summary>
         /// Event raised when the channel is disconnected.
         /// </summary>
         public event EventHandler<ChannelDisconnectedEventArgs>? Disconnected;
-
-        /// <summary>
-        /// Creates a new named pipe client channel.
-        /// </summary>
-        /// <param name="pipeName">The name of the pipe to connect to.</param>
-        /// <param name="serverName">The server name (use "." for local machine).</param>
-        public NamedPipeClientChannel(string pipeName, string serverName = ".")
-        {
-            _pipeName = pipeName ?? throw new ArgumentNullException(nameof(pipeName));
-            _serverName = serverName ?? throw new ArgumentNullException(nameof(serverName));
-            ChannelId = $"{serverName}\\{pipeName}";
-            _sendLock = new SemaphoreSlim(1, 1);
-        }
 
         /// <summary>
         /// Connects to the named pipe server.
@@ -62,20 +52,18 @@ namespace ProcessSandbox.IPC
                 throw new InvalidOperationException("Already connected");
 
             _pipeClient = new NamedPipeClientStream(
-                _serverName,
-                _pipeName,
+                serverName,
+                pipeName,
                 PipeDirection.InOut,
                 PipeOptions.Asynchronous);
 
             try
             {
-                using (var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
-                {
-                    cts.CancelAfter(timeoutMs);
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                cts.CancelAfter(timeoutMs);
 
-                    await _pipeClient.ConnectAsync(cts.Token).ConfigureAwait(false);
-                    _isConnected = true;
-                }
+                await _pipeClient.ConnectAsync(cts.Token).ConfigureAwait(false);
+                _isConnected = true;
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
@@ -95,15 +83,19 @@ namespace ProcessSandbox.IPC
         public async Task SendMessageAsync(IpcMessage message, CancellationToken cancellationToken = default)
         {
             if (_disposed)
+            {
                 throw new ObjectDisposedException(nameof(NamedPipeClientChannel));
+            }
 
             if (!IsConnected)
+            {
                 throw new IpcException("Channel is not connected");
+            }
 
             await _sendLock.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
-                var messageBytes = MessagePackSerializer.Serialize(message);
+                var messageBytes = MessagePackSerializer.Serialize(message, cancellationToken: cancellationToken);
                 await MessageFraming.WriteMessageAsync(_pipeClient!, messageBytes, cancellationToken)
                     .ConfigureAwait(false);
             }
@@ -122,10 +114,14 @@ namespace ProcessSandbox.IPC
         public async Task<IpcMessage?> ReceiveMessageAsync(CancellationToken cancellationToken = default)
         {
             if (_disposed)
+            {
                 throw new ObjectDisposedException(nameof(NamedPipeClientChannel));
+            }
 
             if (!IsConnected)
+            {
                 throw new IpcException("Channel is not connected");
+            }
 
             try
             {
@@ -139,7 +135,7 @@ namespace ProcessSandbox.IPC
                     return null;
                 }
 
-                return MessagePackSerializer.Deserialize<IpcMessage>(messageBytes);
+                return MessagePackSerializer.Deserialize<IpcMessage>(messageBytes, cancellationToken: cancellationToken);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {

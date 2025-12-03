@@ -12,10 +12,13 @@ namespace ProcessSandbox.IPC
     /// <summary>
     /// Named pipe server channel for worker processes.
     /// </summary>
-    public class NamedPipeServerChannel : IIpcChannel
+    /// <remarks>
+    /// Creates a new named pipe server channel.
+    /// </remarks>
+    /// <param name="pipeName">The name of the pipe.</param>
+    public class NamedPipeServerChannel(string pipeName) : IIpcChannel
     {
-        private readonly string _pipeName;
-        private readonly SemaphoreSlim _sendLock;
+        private readonly SemaphoreSlim _sendLock = new(1, 1);
         private NamedPipeServerStream? _pipeServer;
         private bool _disposed;
         private volatile bool _isConnected;
@@ -27,23 +30,12 @@ namespace ProcessSandbox.IPC
         /// <summary>
         /// Gets the channel ID.
         /// </summary>
-        public string ChannelId { get; }
+        public string ChannelId { get { return pipeName; } }
 
         /// <summary>
         /// Event raised when the channel is disconnected.
         /// </summary>
         public event EventHandler<ChannelDisconnectedEventArgs>? Disconnected;
-
-        /// <summary>
-        /// Creates a new named pipe server channel.
-        /// </summary>
-        /// <param name="pipeName">The name of the pipe.</param>
-        public NamedPipeServerChannel(string pipeName)
-        {
-            _pipeName = pipeName ?? throw new ArgumentNullException(nameof(pipeName));
-            ChannelId = pipeName;
-            _sendLock = new SemaphoreSlim(1, 1);
-        }
 
         /// <summary>
         /// Waits for a client to connect to the pipe.
@@ -56,7 +48,7 @@ namespace ProcessSandbox.IPC
 
             // Create the named pipe server
             _pipeServer = new NamedPipeServerStream(
-                _pipeName,
+                pipeName,
                 PipeDirection.InOut,
                 1, // Max one connection per pipe
                 PipeTransmissionMode.Byte,
@@ -90,7 +82,7 @@ namespace ProcessSandbox.IPC
             await _sendLock.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
-                var messageBytes = MessagePackSerializer.Serialize(message);
+                var messageBytes = MessagePackSerializer.Serialize(message, cancellationToken: cancellationToken);
                 await MessageFraming.WriteMessageAsync(_pipeServer!, messageBytes, cancellationToken)
                     .ConfigureAwait(false);
             }
@@ -126,7 +118,7 @@ namespace ProcessSandbox.IPC
                     return null;
                 }
 
-                return MessagePackSerializer.Deserialize<IpcMessage>(messageBytes);
+                return MessagePackSerializer.Deserialize<IpcMessage>(messageBytes, cancellationToken: cancellationToken);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
