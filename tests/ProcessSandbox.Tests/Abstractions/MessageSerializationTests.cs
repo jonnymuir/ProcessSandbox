@@ -24,12 +24,12 @@ namespace ProcessSandbox.Tests.Abstractions
                 30000
             )
             {
-                ParameterTypeNames = new[] { "System.String", "System.Int32" },
-                SerializedParameters = new[]
-                {
+                ParameterTypeNames = ["System.String", "System.Int32"],
+                SerializedParameters =
+                [
                     MessagePackSerializer.Serialize("test"),
                     MessagePackSerializer.Serialize(42)
-                }
+                ]
             };
 
             // Act

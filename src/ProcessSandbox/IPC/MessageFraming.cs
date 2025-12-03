@@ -142,10 +142,8 @@ namespace ProcessSandbox.IPC
         /// <param name="message">The message bytes to write.</param>
         public static void WriteMessage(Stream stream, byte[] message)
         {
-            if (stream == null)
-                throw new ArgumentNullException(nameof(stream));
-            if (message == null)
-                throw new ArgumentNullException(nameof(message));
+            ArgumentNullException.ThrowIfNull(stream);
+            ArgumentNullException.ThrowIfNull(message);
 
             // Write length prefix
             var lengthBytes = BitConverter.GetBytes(message.Length);
@@ -163,8 +161,7 @@ namespace ProcessSandbox.IPC
         /// <returns>The message bytes, or null if stream ended.</returns>
         public static byte[]? ReadMessage(Stream stream)
         {
-            if (stream == null)
-                throw new ArgumentNullException(nameof(stream));
+            ArgumentNullException.ThrowIfNull(stream);
 
             // Read length prefix
             var lengthBuffer = new byte[LengthPrefixSize];

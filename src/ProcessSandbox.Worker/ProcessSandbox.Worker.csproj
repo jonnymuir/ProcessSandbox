@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ProcessSandbox.Abstractions\ProcessSandbox.Abstractions.csproj" />
+    <ProjectReference Include="..\ProcessSandbox\ProcessSandbox.csproj" />
   </ItemGroup>
 
   <ItemGroup>

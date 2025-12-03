@@ -86,8 +86,8 @@ public class NamedPipeChannelIntegrationTests
 
         var invocation = new MethodInvocationMessage(Guid.NewGuid(), "TestMethod", 1000)
         {
-            ParameterTypeNames = new[] { "System.String" },
-            SerializedParameters = new[] { MessagePackSerializer.Serialize("test") }
+            ParameterTypeNames = ["System.String"],
+            SerializedParameters = [MessagePackSerializer.Serialize("test")]
         };
         var message = IpcMessage.FromMethodInvocation(invocation);
 
