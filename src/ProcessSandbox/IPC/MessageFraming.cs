@@ -29,11 +29,11 @@ namespace ProcessSandbox.IPC
         {
             // Write length prefix
             var lengthBytes = BitConverter.GetBytes(message.Length);
-            await stream.WriteAsync(lengthBytes, cancellationToken)
+            await stream.WriteAsync(lengthBytes, 0, lengthBytes.Length, cancellationToken)
                 .ConfigureAwait(false);
 
             // Write message
-            await stream.WriteAsync(message, cancellationToken)
+            await stream.WriteAsync(message, 0, message.Length, cancellationToken)
                 .ConfigureAwait(false);
 
             await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
@@ -142,9 +142,6 @@ namespace ProcessSandbox.IPC
         /// <param name="message">The message bytes to write.</param>
         public static void WriteMessage(Stream stream, byte[] message)
         {
-            ArgumentNullException.ThrowIfNull(stream);
-            ArgumentNullException.ThrowIfNull(message);
-
             // Write length prefix
             var lengthBytes = BitConverter.GetBytes(message.Length);
             stream.Write(lengthBytes, 0, lengthBytes.Length);
@@ -161,8 +158,6 @@ namespace ProcessSandbox.IPC
         /// <returns>The message bytes, or null if stream ended.</returns>
         public static byte[]? ReadMessage(Stream stream)
         {
-            ArgumentNullException.ThrowIfNull(stream);
-
             // Read length prefix
             var lengthBuffer = new byte[LengthPrefixSize];
             var bytesRead = ReadExactly(stream, lengthBuffer, 0, LengthPrefixSize);
