@@ -1,0 +1,168 @@
+using System;
+
+namespace ProcessSandbox.Pool;
+
+/// <summary>
+/// Configuration options for the process pool.
+/// </summary>
+public class ProcessPoolConfiguration
+{
+    /// <summary>
+    /// Gets or sets the minimum number of worker processes to keep in the pool.
+    /// </summary>
+    public int MinPoolSize { get; set; } = 1;
+
+    /// <summary>
+    /// Gets or sets the maximum number of worker processes allowed in the pool.
+    /// </summary>
+    public int MaxPoolSize { get; set; } = 5;
+
+    /// <summary>
+    /// Gets or sets the path to the worker executable.
+    /// If not specified, uses the bundled worker for the current framework.
+    /// </summary>
+    public string? WorkerExecutablePath { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether to use a 32-bit worker process.
+    /// Useful for COM interop scenarios.
+    /// </summary>
+    public bool Use32BitWorker { get; set; } = false;
+
+    /// <summary>
+    /// Gets or sets the path to the assembly containing the implementation.
+    /// </summary>
+    public string ImplementationAssemblyPath { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the full type name of the implementation class.
+    /// </summary>
+    public string ImplementationTypeName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the maximum memory usage in megabytes before recycling a worker.
+    /// </summary>
+    public long MaxMemoryMB { get; set; } = 1024;
+
+    /// <summary>
+    /// Gets or sets the maximum number of GDI objects before recycling a worker.
+    /// </summary>
+    public int MaxGdiHandles { get; set; } = 10000;
+
+    /// <summary>
+    /// Gets or sets the maximum number of USER objects before recycling a worker.
+    /// </summary>
+    public int MaxUserHandles { get; set; } = 10000;
+
+    /// <summary>
+    /// Gets or sets the maximum total handle count before recycling a worker.
+    /// </summary>
+    public int MaxTotalHandles { get; set; } = 10000;
+
+    /// <summary>
+    /// Gets or sets the number of method calls before automatically recycling a worker.
+    /// Set to 0 to disable call-count-based recycling.
+    /// </summary>
+    public int ProcessRecycleThreshold { get; set; } = 1000;
+
+    /// <summary>
+    /// Gets or sets the maximum lifetime of a worker process before recycling.
+    /// </summary>
+    public TimeSpan MaxProcessLifetime { get; set; } = TimeSpan.FromHours(1);
+
+    /// <summary>
+    /// Gets or sets the timeout for method invocations.
+    /// </summary>
+    public TimeSpan MethodCallTimeout { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// Gets or sets the timeout for starting a worker process.
+    /// </summary>
+    public TimeSpan ProcessStartTimeout { get; set; } = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// Gets or sets the interval for health checks on worker processes.
+    /// </summary>
+    public TimeSpan HealthCheckInterval { get; set; } = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// Gets or sets whether to enable verbose logging in worker processes.
+    /// </summary>
+    public bool VerboseWorkerLogging { get; set; } = false;
+
+    /// <summary>
+    /// Validates the configuration and throws if invalid.
+    /// </summary>
+    /// <exception cref="Abstractions.ConfigurationException">Thrown if configuration is invalid.</exception>
+    public void Validate()
+    {
+        if (MinPoolSize < 0)
+            throw new Abstractions.ConfigurationException("MinPoolSize must be >= 0");
+
+        if (MaxPoolSize < 1)
+            throw new Abstractions.ConfigurationException("MaxPoolSize must be >= 1");
+
+        if (MinPoolSize > MaxPoolSize)
+            throw new Abstractions.ConfigurationException("MinPoolSize cannot exceed MaxPoolSize");
+
+        if (string.IsNullOrWhiteSpace(ImplementationAssemblyPath))
+            throw new Abstractions.ConfigurationException("ImplementationAssemblyPath is required");
+
+        if (string.IsNullOrWhiteSpace(ImplementationTypeName))
+            throw new Abstractions.ConfigurationException("ImplementationTypeName is required");
+
+        if (MaxMemoryMB <= 0)
+            throw new Abstractions.ConfigurationException("MaxMemoryMB must be positive");
+
+        if (MaxGdiHandles <= 0)
+            throw new Abstractions.ConfigurationException("MaxGdiHandles must be positive");
+
+        if (MaxUserHandles <= 0)
+            throw new Abstractions.ConfigurationException("MaxUserHandles must be positive");
+
+        if (MaxTotalHandles <= 0)
+            throw new Abstractions.ConfigurationException("MaxTotalHandles must be positive");
+
+        if (ProcessRecycleThreshold < 0)
+            throw new Abstractions.ConfigurationException("ProcessRecycleThreshold must be >= 0");
+
+        if (MaxProcessLifetime <= TimeSpan.Zero)
+            throw new Abstractions.ConfigurationException("MaxProcessLifetime must be positive");
+
+        if (MethodCallTimeout <= TimeSpan.Zero)
+            throw new Abstractions.ConfigurationException("MethodCallTimeout must be positive");
+
+        if (ProcessStartTimeout <= TimeSpan.Zero)
+            throw new Abstractions.ConfigurationException("ProcessStartTimeout must be positive");
+
+        if (HealthCheckInterval <= TimeSpan.Zero)
+            throw new Abstractions.ConfigurationException("HealthCheckInterval must be positive");
+    }
+
+    /// <summary>
+    /// Creates a copy of this configuration.
+    /// </summary>
+    /// <returns>A new instance with the same values.</returns>
+    public ProcessPoolConfiguration Clone()
+    {
+        return new ProcessPoolConfiguration
+        {
+            MinPoolSize = MinPoolSize,
+            MaxPoolSize = MaxPoolSize,
+            WorkerExecutablePath = WorkerExecutablePath,
+            Use32BitWorker = Use32BitWorker,
+            ImplementationAssemblyPath = ImplementationAssemblyPath,
+            ImplementationTypeName = ImplementationTypeName,
+            MaxMemoryMB = MaxMemoryMB,
+            MaxGdiHandles = MaxGdiHandles,
+            MaxUserHandles = MaxUserHandles,
+            MaxTotalHandles = MaxTotalHandles,
+            ProcessRecycleThreshold = ProcessRecycleThreshold,
+            MaxProcessLifetime = MaxProcessLifetime,
+            MethodCallTimeout = MethodCallTimeout,
+            ProcessStartTimeout = ProcessStartTimeout,
+            HealthCheckInterval = HealthCheckInterval,
+            VerboseWorkerLogging = VerboseWorkerLogging
+        };
+    }
+}
