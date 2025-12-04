@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using ProcessSandbox.Pool;
 using ProcessSandbox.Proxy;
 using ProcessSandbox.Tests.TestImplementations;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace ProcessSandbox.Tests.Integration;
 
@@ -22,11 +23,7 @@ public class ProcessPoolStatisticsTests
     /// </summary>
     public ProcessPoolStatisticsTests()
     {
-        _loggerFactory = LoggerFactory.Create(builder =>
-        {
-            builder.AddConsole();
-            builder.SetMinimumLevel(LogLevel.Warning);
-        });
+        _loggerFactory = _loggerFactory = NullLoggerFactory.Instance;
 
         _testAssemblyPath = typeof(TestServiceImpl).Assembly.Location;
     }
@@ -47,7 +44,6 @@ public class ProcessPoolStatisticsTests
             ImplementationTypeName = typeof(TestServiceImpl).FullName!,
             MethodCallTimeout = TimeSpan.FromSeconds(10),
             ProcessStartTimeout = TimeSpan.FromSeconds(10),
-            HealthCheckInterval = TimeSpan.FromSeconds(5)
         };
 
         var pool = new ProcessPool(config, _loggerFactory);

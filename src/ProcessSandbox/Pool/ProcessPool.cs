@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -46,7 +47,7 @@ public class ProcessPool : IDisposable
 
         _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
         _logger = loggerFactory.CreateLogger<ProcessPool>();
-        
+
         _availableWorkers = new ConcurrentBag<WorkerProcess>();
         _allWorkers = new ConcurrentDictionary<string, WorkerProcess>();
         _poolLock = new SemaphoreSlim(1, 1);
@@ -118,7 +119,7 @@ public class ProcessPool : IDisposable
                 _logger.LogInformation(
                     "Worker {WorkerId} needs recycling, starting replacement",
                     worker.WorkerId);
-                
+
                 _ = Task.Run(async () =>
                 {
                     await RecycleWorkerAsync(worker);
@@ -300,13 +301,39 @@ public class ProcessPool : IDisposable
             BusyWorkers = workers.Count(w => w.IsBusy),
             AvailableWorkers = workers.Count(w => w.IsHealthy && !w.IsBusy),
             TotalCalls = workers.Sum(w => w.CallCount),
-            AverageMemoryMB = workers
-                .Where(w => w.LastHealthReport != null)
-                .Select(w => w.LastHealthReport!.WorkingSetMB)
-                .DefaultIfEmpty(0)
-                .Average()
+            AverageMemoryMB = CalculateAverageMemory(workers)
         };
     }
+
+
+    private double CalculateAverageMemory(WorkerProcess[] workers)
+    {
+        var memorySum = 0.0;
+        var count = 0;
+
+        foreach (var worker in workers)
+        {
+            try
+            {
+                if (worker.ProcessId > 0)
+                {
+                    var process = Process.GetProcessById(worker.ProcessId);
+                    if (!process.HasExited)
+                    {
+                        memorySum += process.WorkingSet64 / (1024.0 * 1024.0);
+                        count++;
+                    }
+                }
+            }
+            catch
+            {
+                // Worker might have exited, skip it
+            }
+        }
+
+        return count > 0 ? memorySum / count : 0;
+    }
+
 
     /// <summary>
     /// Disposes the process pool and all worker processes.

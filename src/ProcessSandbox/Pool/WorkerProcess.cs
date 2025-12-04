@@ -18,10 +18,9 @@ public class WorkerProcess : IDisposable
     private readonly ILogger<WorkerProcess> _logger;
     private readonly string _workerId;
     private readonly DateTime _startTime;
-    
+
     private Process? _process;
     private RequestResponseChannel? _channel;
-    private HealthReportMessage? _lastHealthReport;
     private int _callCount;
     private bool _disposed;
     private readonly SemaphoreSlim _usageLock;
@@ -55,11 +54,6 @@ public class WorkerProcess : IDisposable
     /// Gets the time when this worker was started.
     /// </summary>
     public DateTime StartTime => _startTime;
-
-    /// <summary>
-    /// Gets the last health report received from the worker.
-    /// </summary>
-    public HealthReportMessage? LastHealthReport => _lastHealthReport;
 
     /// <summary>
     /// Event raised when the worker process exits or becomes unhealthy.
@@ -100,15 +94,22 @@ public class WorkerProcess : IDisposable
             // Generate unique pipe name
             var pipeName = PipeNameGenerator.Generate();
 
+            #if NET48
+                // This code runs only when compiling for .NET Framework 4.8
+                int currentProcessId = Process.GetCurrentProcess().Id;
+            #else
+                // This code runs when compiling for .NET 8 (or any other modern .NET target)
+                int currentProcessId = Environment.ProcessId;
+            #endif
+
             // Create worker configuration
             var workerConfig = new WorkerConfiguration
             {
                 AssemblyPath = _config.ImplementationAssemblyPath,
                 TypeName = _config.ImplementationTypeName,
                 PipeName = pipeName,
-                HealthReportIntervalMs = (int)_config.HealthCheckInterval.TotalMilliseconds,
                 VerboseLogging = _config.VerboseWorkerLogging,
-                ParentProcessId = Environment.ProcessId
+                ParentProcessId = currentProcessId
             };
 
             // Serialize configuration to base64
@@ -116,7 +117,7 @@ public class WorkerProcess : IDisposable
             var configBase64 = Convert.ToBase64String(configBytes);
 
             // Determine worker executable path
-            var workerExePath = _config.WorkerExecutablePath 
+            var workerExePath = _config.WorkerExecutablePath
                 ?? GetDefaultWorkerExecutablePath();
 
             // Start the process
@@ -160,7 +161,7 @@ public class WorkerProcess : IDisposable
 
             // Connect to the worker via named pipe
             var client = new NamedPipeClientChannel(pipeName);
-            
+
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeoutCts.CancelAfter(_config.ProcessStartTimeout);
 
@@ -216,15 +217,6 @@ public class WorkerProcess : IDisposable
     }
 
     /// <summary>
-    /// Updates the health report for this worker.
-    /// </summary>
-    /// <param name="report">The health report.</param>
-    public void UpdateHealthReport(HealthReportMessage report)
-    {
-        _lastHealthReport = report;
-    }
-
-    /// <summary>
     /// Checks if the worker should be recycled based on configured thresholds.
     /// </summary>
     /// <returns>True if the worker should be recycled; otherwise, false.</returns>
@@ -253,51 +245,90 @@ public class WorkerProcess : IDisposable
             return true;
         }
 
-        // Check health report thresholds
-        if (_lastHealthReport != null)
+        // Passive health checks - query the process directly
+        if (_process != null && !_process.HasExited)
         {
-            if (_lastHealthReport.WorkingSetMB > _config.MaxMemoryMB)
+            try
             {
-                _logger.LogInformation(
-                    "Worker {WorkerId} should recycle: memory {Memory}MB > {MaxMemory}MB",
-                    _workerId,
-                    _lastHealthReport.WorkingSetMB,
-                    _config.MaxMemoryMB);
-                return true;
-            }
+                // Check memory usage
+                var workingSetMB = _process.WorkingSet64 / (1024.0 * 1024.0);
+                if (workingSetMB > _config.MaxMemoryMB)
+                {
+                    _logger.LogInformation(
+                        "Worker {WorkerId} should recycle: memory {Memory:F1}MB > {MaxMemory}MB",
+                        _workerId,
+                        workingSetMB,
+                        _config.MaxMemoryMB);
+                    return true;
+                }
 
-            if (_lastHealthReport.GdiObjects > _config.MaxGdiHandles)
-            {
-                _logger.LogInformation(
-                    "Worker {WorkerId} should recycle: GDI handles {GdiHandles} > {MaxGdiHandles}",
-                    _workerId,
-                    _lastHealthReport.GdiObjects,
-                    _config.MaxGdiHandles);
-                return true;
-            }
+                // Check GDI objects
+                var gdiObjects = GetGdiObjectCount(_process);
+                if (gdiObjects > _config.MaxGdiHandles)
+                {
+                    _logger.LogInformation(
+                        "Worker {WorkerId} should recycle: GDI handles {GdiHandles} > {MaxGdiHandles}",
+                        _workerId,
+                        gdiObjects,
+                        _config.MaxGdiHandles);
+                    return true;
+                }
 
-            if (_lastHealthReport.UserObjects > _config.MaxUserHandles)
-            {
-                _logger.LogInformation(
-                    "Worker {WorkerId} should recycle: USER handles {UserHandles} > {MaxUserHandles}",
-                    _workerId,
-                    _lastHealthReport.UserObjects,
-                    _config.MaxUserHandles);
-                return true;
-            }
+                // Check USER objects
+                var userObjects = GetUserObjectCount(_process);
+                if (userObjects > _config.MaxUserHandles)
+                {
+                    _logger.LogInformation(
+                        "Worker {WorkerId} should recycle: USER handles {UserHandles} > {MaxUserHandles}",
+                        _workerId,
+                        userObjects,
+                        _config.MaxUserHandles);
+                    return true;
+                }
 
-            if (_lastHealthReport.HandleCount > _config.MaxTotalHandles)
+                // Check total handles
+                if (_process.HandleCount > _config.MaxTotalHandles)
+                {
+                    _logger.LogInformation(
+                        "Worker {WorkerId} should recycle: total handles {TotalHandles} > {MaxTotalHandles}",
+                        _workerId,
+                        _process.HandleCount,
+                        _config.MaxTotalHandles);
+                    return true;
+                }
+            }
+            catch (Exception ex)
             {
-                _logger.LogInformation(
-                    "Worker {WorkerId} should recycle: total handles {TotalHandles} > {MaxTotalHandles}",
-                    _workerId,
-                    _lastHealthReport.HandleCount,
-                    _config.MaxTotalHandles);
-                return true;
+                _logger.LogWarning(ex, "Error checking worker {WorkerId} health, marking for recycle", _workerId);
+                return true; // Process is probably dead or inaccessible
             }
         }
 
         return false;
+    }
+
+    private static int GetGdiObjectCount(Process process)
+    {
+        try
+        {
+            return NativeMethods.GetGuiResources(process.Handle, 0); // GR_GDIOBJECTS = 0
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+
+    private static int GetUserObjectCount(Process process)
+    {
+        try
+        {
+            return NativeMethods.GetGuiResources(process.Handle, 1); // GR_USEROBJECTS = 1
+        }
+        catch
+        {
+            return 0;
+        }
     }
 
     /// <summary>
@@ -450,4 +481,19 @@ public class WorkerFailedEventArgs : EventArgs
         Reason = reason;
         Exception = exception;
     }
+}
+
+/// <summary>
+/// Native methods for retrieving GDI/USER object counts.
+/// </summary>
+internal static class NativeMethods
+{
+    /// <summary>
+    /// Gets the count of GDI or USER objects for a process.
+    /// </summary>
+    /// <param name="hProcess">Handle to the process.</param>
+    /// <param name="uiFlags">0 for GDI objects, 1 for USER objects.</param>
+    /// <returns>The count of objects.</returns>
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    internal static extern int GetGuiResources(IntPtr hProcess, int uiFlags);
 }

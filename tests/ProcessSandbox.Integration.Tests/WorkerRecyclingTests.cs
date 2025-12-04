@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using ProcessSandbox.Pool;
 using ProcessSandbox.Proxy;
 using ProcessSandbox.Tests.TestImplementations;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace ProcessSandbox.Tests.Integration;
 
@@ -22,11 +23,7 @@ public class WorkerRecyclingTests
     /// </summary>
     public WorkerRecyclingTests()
     {
-        _loggerFactory = LoggerFactory.Create(builder =>
-        {
-            builder.AddConsole();
-            builder.SetMinimumLevel(LogLevel.Information);
-        });
+        _loggerFactory = _loggerFactory = NullLoggerFactory.Instance;
 
         _testAssemblyPath = typeof(TestServiceImpl).Assembly.Location;
     }
@@ -48,10 +45,9 @@ public class WorkerRecyclingTests
             ProcessRecycleThreshold = 5, // Recycle after 5 calls
             MethodCallTimeout = TimeSpan.FromSeconds(10),
             ProcessStartTimeout = TimeSpan.FromSeconds(10),
-            HealthCheckInterval = TimeSpan.FromSeconds(5)
         };
 
-        using var proxy = await ProcessProxy.CreateAsync<ITestService>(config, _loggerFactory);
+        var proxy = await ProcessProxy.CreateAsync<ITestService>(config, _loggerFactory);
 
         // Act - make more calls than the threshold
         for (int i = 0; i < 10; i++)
@@ -80,10 +76,9 @@ public class WorkerRecyclingTests
             ProcessRecycleThreshold = 3,
             MethodCallTimeout = TimeSpan.FromSeconds(10),
             ProcessStartTimeout = TimeSpan.FromSeconds(10),
-            HealthCheckInterval = TimeSpan.FromSeconds(5)
         };
 
-        using var proxy = await ProcessProxy.CreateAsync<ITestService>(config, _loggerFactory);
+        var proxy = await ProcessProxy.CreateAsync<ITestService>(config, _loggerFactory);
 
         // Act
         var result1 = proxy.Echo("First"); // Call 1

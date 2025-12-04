@@ -346,7 +346,6 @@ public class WorkerConfigurationTests
             AssemblyPath = "test.dll",
             TypeName = "Test.Type",
             PipeName = "test-pipe",
-            HealthReportIntervalMs = 5000,
             ParentProcessId = 1234
         };
 
@@ -384,7 +383,6 @@ public class WorkerConfigurationTests
             AssemblyPath = "test.dll",
             TypeName = "Test.Type",
             PipeName = "test-pipe",
-            HealthReportIntervalMs = -1,
             ParentProcessId = 1234
         };
 

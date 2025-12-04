@@ -23,7 +23,6 @@ public class WorkerHost(WorkerConfiguration config, ILoggerFactory loggerFactory
     private readonly CancellationTokenSource _shutdownCts = new CancellationTokenSource();
     
     private NamedPipeServerChannel? _channel;
-    private HealthReporter? _healthReporter;
     private MethodInvoker? _methodInvoker;
     private bool _disposed;
 
@@ -63,12 +62,6 @@ public class WorkerHost(WorkerConfiguration config, ILoggerFactory loggerFactory
             // Wait for client connection
             await _channel.WaitForConnectionAsync(_shutdownCts.Token).ConfigureAwait(false);
             _logger.LogInformation("Client connected");
-
-            // Start health reporter
-            _healthReporter = new HealthReporter(
-                _channel,
-                config.HealthReportIntervalMs,
-                loggerFactory.CreateLogger<HealthReporter>());
 
             // Process messages until shutdown
             await MessageProcessingLoop().ConfigureAwait(false);
@@ -177,9 +170,6 @@ public class WorkerHost(WorkerConfiguration config, ILoggerFactory loggerFactory
         {
             // Invoke the method
             result = _methodInvoker!.InvokeMethod(invocation);
-
-            // Increment call counter for health reporting
-            _healthReporter?.IncrementCallCount();
         }
         catch (Exception ex)
         {
@@ -245,9 +235,6 @@ public class WorkerHost(WorkerConfiguration config, ILoggerFactory loggerFactory
     {
         _logger.LogInformation("Cleaning up resources...");
 
-        _healthReporter?.Dispose();
-        _healthReporter = null;
-
         if (_channel != null)
         {
             _channel.Disconnected -= OnChannelDisconnected;
@@ -272,7 +259,6 @@ public class WorkerHost(WorkerConfiguration config, ILoggerFactory loggerFactory
         _shutdownCts?.Cancel();
         _shutdownCts?.Dispose();
 
-        _healthReporter?.Dispose();
         _channel?.Dispose();
     }
 }

@@ -6,6 +6,8 @@ using Microsoft.Extensions.Logging;
 using ProcessSandbox.Pool;
 using ProcessSandbox.Proxy;
 using ProcessSandbox.Tests.TestImplementations;
+using ProcessSandbox.Abstractions;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace ProcessSandbox.Tests.Integration;
 
@@ -22,11 +24,7 @@ public class EndToEndTests : IDisposable
     /// </summary>
     public EndToEndTests()
     {
-        _loggerFactory = LoggerFactory.Create(builder =>
-        {
-            builder.AddConsole();
-            builder.SetMinimumLevel(LogLevel.Information);
-        });
+        _loggerFactory = NullLoggerFactory.Instance;
 
         _testAssemblyPath = typeof(TestServiceImpl).Assembly.Location;
     }
@@ -42,7 +40,7 @@ public class EndToEndTests : IDisposable
         var config = CreateTestConfiguration(typeof(TestServiceImpl));
 
         // Act
-        using var proxy = await ProcessProxy.CreateAsync<ITestService>(config, _loggerFactory);
+        var proxy = await ProcessProxy.CreateAsync<ITestService>(config, _loggerFactory);
         var result = proxy.Echo("Hello");
 
         // Assert
@@ -60,7 +58,7 @@ public class EndToEndTests : IDisposable
         var config = CreateTestConfiguration(typeof(TestServiceImpl));
 
         // Act
-        using var proxy = await ProcessProxy.CreateAsync<ITestService>(config, _loggerFactory);
+        var proxy = await ProcessProxy.CreateAsync<ITestService>(config, _loggerFactory);
         var result = proxy.Add(5, 3);
 
         // Assert
@@ -78,7 +76,7 @@ public class EndToEndTests : IDisposable
         var config = CreateTestConfiguration(typeof(TestServiceImpl));
 
         // Act
-        using var proxy = await ProcessProxy.CreateAsync<ITestService>(config, _loggerFactory);
+        var proxy = await ProcessProxy.CreateAsync<ITestService>(config, _loggerFactory);
         proxy.DoNothing(); // Should not throw
 
         // Assert - no exception thrown
@@ -95,7 +93,7 @@ public class EndToEndTests : IDisposable
         var config = CreateTestConfiguration(typeof(ThrowingServiceImpl));
 
         // Act
-        using var proxy = await ProcessProxy.CreateAsync<ITestService>(config, _loggerFactory);
+        var proxy = await ProcessProxy.CreateAsync<ITestService>(config, _loggerFactory);
         
         // Assert
         var ex = Assert.Throws<Abstractions.RemoteInvocationException>(() => proxy.Echo("test"));
@@ -113,7 +111,7 @@ public class EndToEndTests : IDisposable
         var config = CreateTestConfiguration(typeof(TestServiceImpl));
         config.MaxPoolSize = 3;
 
-        using var proxy = await ProcessProxy.CreateAsync<ITestService>(config, _loggerFactory);
+        var proxy = await ProcessProxy.CreateAsync<ITestService>(config, _loggerFactory);
 
         // Act
         var tasks = new Task<int>[10];
@@ -142,7 +140,7 @@ public class EndToEndTests : IDisposable
     {
         // Arrange
         var config = CreateTestConfiguration(typeof(TestServiceImpl));
-        using var proxy = await ProcessProxy.CreateAsync<ITestService>(config, _loggerFactory);
+        var proxy = await ProcessProxy.CreateAsync<ITestService>(config, _loggerFactory);
 
         var input = new byte[] { 1, 2, 3, 4, 5 };
 
@@ -166,7 +164,6 @@ public class EndToEndTests : IDisposable
             ProcessRecycleThreshold = 100,
             MethodCallTimeout = TimeSpan.FromSeconds(10),
             ProcessStartTimeout = TimeSpan.FromSeconds(10),
-            HealthCheckInterval = TimeSpan.FromSeconds(5),
             VerboseWorkerLogging = false
         };
     }

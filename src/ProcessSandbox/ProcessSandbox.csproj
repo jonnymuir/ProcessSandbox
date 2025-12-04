@@ -13,6 +13,9 @@
   <ItemGroup>
     <PackageReference Include="MessagePack" Version="$(MessagePackVersion)" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="$(MicrosoftExtensionsLoggingVersion)" />
+    <PackageReference Include="System.IO.Pipes" Version="4.3.0" Condition="'$(TargetFramework)' == 'net48'" />
+    <PackageReference Include="System.Reflection.DispatchProxy" Version="4.7.1" Condition="'$(TargetFramework)' == 'net48'" />
+
   </ItemGroup>
 
   <!-- Embed worker executables as resources -->

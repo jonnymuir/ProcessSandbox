@@ -27,21 +27,15 @@ public class WorkerConfiguration
     public string PipeName { get; set; } = string.Empty;
 
     /// <summary>
-    /// Interval in milliseconds for sending health reports.
-    /// </summary>
-    [Key(3)]
-    public int HealthReportIntervalMs { get; set; } = 5000;
-
-    /// <summary>
     /// Whether to enable verbose logging in the worker.
     /// </summary>
-    [Key(4)]
+    [Key(3)]
     public bool VerboseLogging { get; set; }
 
     /// <summary>
     /// Process ID of the parent process (for monitoring).
     /// </summary>
-    [Key(5)]
+    [Key(4)]
     public int ParentProcessId { get; set; }
 
     /// <summary>
@@ -58,9 +52,6 @@ public class WorkerConfiguration
 
         if (string.IsNullOrWhiteSpace(PipeName))
             throw new ConfigurationException("PipeName is required");
-
-        if (HealthReportIntervalMs <= 0)
-            throw new ConfigurationException("HealthReportIntervalMs must be positive");
 
         if (ParentProcessId <= 0)
             throw new ConfigurationException("ParentProcessId must be positive");

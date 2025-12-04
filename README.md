@@ -92,8 +92,7 @@ var config = new ProcessPoolConfiguration
     ProcessRecycleThreshold = 100,// Recycle after 100 calls
     
     // Timeouts
-    MethodCallTimeout = TimeSpan.FromSeconds(30),
-    HealthCheckInterval = TimeSpan.FromSeconds(5)
+    MethodCallTimeout = TimeSpan.FromSeconds(90),
 };
 ```
 

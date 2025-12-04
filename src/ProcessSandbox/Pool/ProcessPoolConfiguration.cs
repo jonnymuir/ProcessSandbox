@@ -73,17 +73,12 @@ public class ProcessPoolConfiguration
     /// <summary>
     /// Gets or sets the timeout for method invocations.
     /// </summary>
-    public TimeSpan MethodCallTimeout { get; set; } = TimeSpan.FromSeconds(30);
+    public TimeSpan MethodCallTimeout { get; set; } = TimeSpan.FromSeconds(120);
 
     /// <summary>
     /// Gets or sets the timeout for starting a worker process.
     /// </summary>
     public TimeSpan ProcessStartTimeout { get; set; } = TimeSpan.FromSeconds(10);
-
-    /// <summary>
-    /// Gets or sets the interval for health checks on worker processes.
-    /// </summary>
-    public TimeSpan HealthCheckInterval { get; set; } = TimeSpan.FromSeconds(5);
 
     /// <summary>
     /// Gets or sets whether to enable verbose logging in worker processes.
@@ -134,9 +129,6 @@ public class ProcessPoolConfiguration
 
         if (ProcessStartTimeout <= TimeSpan.Zero)
             throw new Abstractions.ConfigurationException("ProcessStartTimeout must be positive");
-
-        if (HealthCheckInterval <= TimeSpan.Zero)
-            throw new Abstractions.ConfigurationException("HealthCheckInterval must be positive");
     }
 
     /// <summary>
@@ -161,7 +153,6 @@ public class ProcessPoolConfiguration
             MaxProcessLifetime = MaxProcessLifetime,
             MethodCallTimeout = MethodCallTimeout,
             ProcessStartTimeout = ProcessStartTimeout,
-            HealthCheckInterval = HealthCheckInterval,
             VerboseWorkerLogging = VerboseWorkerLogging
         };
     }

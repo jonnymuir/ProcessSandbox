@@ -120,7 +120,6 @@ Recycle triggers:
 - Handle threshold exceeded
 - Call count threshold reached
 - Unhandled exception in worker
-- Health check timeout
 
 ## IPC Protocol
 
@@ -221,7 +220,6 @@ public class ProcessPoolConfiguration
     // Timeouts
     public TimeSpan MethodCallTimeout { get; set; } = TimeSpan.FromSeconds(30);
     public TimeSpan ProcessStartTimeout { get; set; } = TimeSpan.FromSeconds(10);
-    public TimeSpan HealthCheckInterval { get; set; } = TimeSpan.FromSeconds(5);
     
     // IPC
     public string PipeNamePrefix { get; set; } = "ProcessSandbox";
