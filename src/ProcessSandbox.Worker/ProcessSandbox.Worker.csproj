@@ -2,21 +2,24 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
-    <AssemblyName>ProcessSandbox.Worker</AssemblyName>
-    <IsPackable>false</IsPackable>
-    <SelfContained>false</SelfContained>
-  </PropertyGroup>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks> 
+    </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\ProcessSandbox.Abstractions\ProcessSandbox.Abstractions.csproj" />
     <ProjectReference Include="..\ProcessSandbox\ProcessSandbox.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <PackageReference Include="MessagePack" Version="$(MessagePackVersion)" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="$(MicrosoftExtensionsLoggingVersion)" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="$(MicrosoftExtensionsLoggingVersion)" />
+  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
+    <PackageReference Include="MessagePack" Version="3.1.4" /> 
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="8.0.0" />
+  </ItemGroup>
+  
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
+    <PackageReference Include="MessagePack" Version="3.1.4" /> 
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.0" />
   </ItemGroup>
 
 </Project>

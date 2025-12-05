@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net8.0;net48</TargetFrameworks>
+    <TargetFrameworks>net8.0;net10.0;net48</TargetFrameworks>
     <Description>Process isolation library for .NET that protects your application from legacy, unmanaged, or problematic code by running it in separate sandboxed processes.</Description>
     <PackageId>ProcessSandbox</PackageId>
   </PropertyGroup>
