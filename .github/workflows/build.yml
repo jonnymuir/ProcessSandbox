@@ -32,7 +32,14 @@ jobs:
       run: dotnet build --configuration Release --no-restore
     
     - name: Test
-      run: dotnet test --configuration Release --no-build --verbosity normal --collect:"XPlat Code Coverage"
+      run: dotnet test --configuration Release --no-build --verbosity normal --collect:"XPlat Code Coverage" --logger trx --results-directory "TestResults"
+
+    - name: Publish Test Results
+      uses: microsoft/azure-pipelines-tasks-publish-test-results@v1
+      if: always()
+      with:
+        testResultsFormat: 'VSTest'
+        testResultsFiles: '**/TestResults/**/*.trx'    
     
     - name: Upload coverage reports
       uses: codecov/codecov-action@v4
