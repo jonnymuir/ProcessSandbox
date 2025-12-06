@@ -36,15 +36,15 @@ jobs:
     
     - name: Pack
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-      run: dotnet pack --configuration Release --no-build --output ./artifacts
+      run: dotnet pack --configuration Release --no-build --output ${{ github.workspace }}/artifacts
 
     - name: Push to NuGet.org
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-      run: dotnet nuget push artifacts/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source "https://api.nuget.org/v3/index.json" --skip-duplicate
+      run: dotnet nuget push ${{ github.workspace }}/artifacts/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source "https://api.nuget.org/v3/index.json" --skip-duplicate
     
     - name: Upload artifacts
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       uses: actions/upload-artifact@v4
       with:
         name: nuget-packages
-        path: artifacts/*.nupkg
+        path: ${{ github.workspace }}/artifacts/*.nupkg
