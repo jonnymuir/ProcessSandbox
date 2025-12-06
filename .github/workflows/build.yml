@@ -49,7 +49,7 @@ jobs:
       run: dotnet test --configuration Release --no-build --verbosity normal --collect:"XPlat Code Coverage"
     
     - name: Pack
-      iif: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && contains(fromJSON('["full-build", "pack-only"]'), github.event.inputs.action_mode))
+      if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && contains(fromJSON('["full-build", "pack-only"]'), github.event.inputs.action_mode))
       run: dotnet pack --configuration Release --no-build --output ${{ github.workspace }}\artifacts
 
     - name: Push to NuGet.org
