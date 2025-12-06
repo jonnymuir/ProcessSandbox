@@ -30,6 +30,8 @@ You have legacy code that:
 
 ## Quick Start
 
+See the [tutorial](Tutorial.md) for an easy to follow example of how ProcessSandbox.Runner works
+
 ### Installation
 
 ```bash
@@ -142,7 +144,7 @@ Your App (.NET) → ProcessProxy<T> → [Worker Pool] → Worker Process
 ## Requirements
 
 - Windows (Job Objects for orphan prevention)
-- .NET 8.0 or .NET Framework 4.8
+- .NET 8.0 / 10.0 or .NET Framework 4.8
 - Administrator rights not required
 
 ## Building
