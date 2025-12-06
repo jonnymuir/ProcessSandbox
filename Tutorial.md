@@ -33,9 +33,13 @@ dotnet sln add LegacyLibrary/LegacyLibrary.csproj
 # 6. Add reference: Host depends on Library (for the interface)
 dotnet add SandboxHost/SandboxHost.csproj reference LegacyLibrary/LegacyLibrary.csproj
 
-# 7. Install ProcessSandbox.Runner into the Host
-# (Assuming you are using a local source or nuget.org)
+# 7. Install ProcessSandbox.Runner and Worker into the Host
 dotnet add SandboxHost/SandboxHost.csproj package ProcessSandbox.Runner --prerelease
+dotnet add SandboxHost/SandboxHost.csproj package ProcessSandbox.Worker --prerelease
+
+
+# 8. Add Logging package
+dotnet add SandboxHost/SandboxHost.csproj package Microsoft.Extensions.Logging.Console
 ```
 
 ### Phase 2: Create the "Bad" Code
@@ -43,9 +47,6 @@ dotnet add SandboxHost/SandboxHost.csproj package ProcessSandbox.Runner --prerel
 We need code that behaves badly. Open `LegacyLibrary/Class1.cs` and replace it with this:
 
 ```csharp
-using System;
-using System.Collections.Generic;
-
 namespace LegacyLibrary;
 
 public interface IUnstableService
@@ -59,11 +60,19 @@ public class UnstableService : IUnstableService
     // A static list that never gets cleared = Classic Memory Leak
     private static readonly List<byte[]> _memoryHog = new();
 
+    /// <summary>
+    /// Returns the current process ID for debugging in the demo
+    /// </summary>
+    /// <returns></returns>
     public int GetProcessId()
     {
         return Environment.ProcessId;
     }
 
+    /// <summary>
+    /// Simulates a memory leak by allocating unmanaged memory
+    /// </summary>
+    /// <param name="megabytes"></param>
     public void LeakMemory(int megabytes)
     {
         // Allocate unmanaged memory to simulate a heavy leak
@@ -74,8 +83,6 @@ public class UnstableService : IUnstableService
         
         // Add to static list so GC cannot collect it
         _memoryHog.Add(data); 
-        
-        Console.WriteLine($"[LegacyDLL] Leaked {megabytes}MB. Total objects: {_memoryHog.Count}");
     }
 }
 ```
@@ -87,12 +94,10 @@ Now, let's configure the host to watch this service. We will set a strict memory
 Open `SandboxHost/Program.cs`:
 
 ```csharp
-using System;
-using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using ProcessSandbox;
 using ProcessSandbox.Pool;
 using LegacyLibrary;
+using ProcessSandbox.Proxy;
 
 // 1. Setup minimal logging to see Sandbox internals
 using var loggerFactory = LoggerFactory.Create(builder =>
@@ -120,9 +125,7 @@ Console.WriteLine("--- 🛡️ Starting ProcessSandbox Monitor ---");
 Console.WriteLine($"Policy: Max Memory = {config.MaxMemoryMB}MB");
 
 // 3. Create the Proxy
-using var pool = new ProcessPool(config, loggerFactory);
-await pool.InitializeAsync();
-var proxy = await ProcessProxy.CreateAsync<IUnstableService>(pool);
+var proxy = await ProcessProxy.CreateAsync<IUnstableService>(config, loggerFactory);
 
 // 4. Run the Simulation Loop
 var iteration = 1;
@@ -135,23 +138,12 @@ while (true)
         Console.ForegroundColor = ConsoleColor.Cyan;
         Console.Write($"\n[Call #{iteration}] Sending request... ");
         
-        // This call happens in the worker process!
-        var remotePid = await proxy.GetProcessId(); 
-        await proxy.LeakMemory(10); // Leak 10MB per call
+        // This call happens in the worker process
+        var remotePid = proxy.GetProcessId(); 
+        proxy.LeakMemory(10); // Leak 10MB per call
         
         Console.ForegroundColor = ConsoleColor.Green;
         Console.WriteLine($"Success (Worker PID: {remotePid})");
-        
-        // B. Check Stats
-        var stats = pool.GetStatistics();
-        Console.ForegroundColor = ConsoleColor.White;
-        Console.WriteLine($"   Pool Stats -> Workers: {stats.TotalWorkers} | Avg Memory: {stats.AverageMemoryMB:F1}MB");
-
-        if (stats.AverageMemoryMB > 40)
-        {
-             Console.ForegroundColor = ConsoleColor.Yellow;
-             Console.WriteLine("   ⚠️ WARNING: Memory limit approaching!");
-        }
 
         iteration++;
         await Task.Delay(1000); // Wait a second to watch the show
