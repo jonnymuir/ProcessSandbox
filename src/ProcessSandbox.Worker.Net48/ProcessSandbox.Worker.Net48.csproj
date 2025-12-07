@@ -6,6 +6,7 @@
     <AssemblyName>ProcessSandbox.Worker.Net48</AssemblyName>
     <IsPackable>false</IsPackable>
     <LangVersion>latest</LangVersion>
+    <IsTool>true</IsTool>
   </PropertyGroup>
 
   <ItemGroup>
@@ -22,5 +23,22 @@
     <Reference Include="System" />
     <Reference Include="System.Core" />
   </ItemGroup>
+
+  <Target Name="AddWorkerAssetsToPackage" AfterTargets="Build">
+      <ItemGroup>
+          <WorkerHostFiles Include="$(TargetDir)ProcessSandbox.Worker.deps.json" />
+          <WorkerHostFiles Include="$(TargetDir)ProcessSandbox.Worker.runtimeconfig.json" />
+          <WorkerHostFiles Include="$(TargetDir)ProcessSandbox.Worker" />
+          <WorkerHostFiles Include="$(TargetDir)ProcessSandbox.Worker.exe" />
+      </ItemGroup>
+
+      <ItemGroup>
+          <Content Include="@(WorkerHostFiles)"
+                  Condition="Exists('%(Identity)')"
+                  CopyToOutputDirectory="PreserveNewest"
+                  PackageCopyToOutput="true"
+                  PackagePath="contentFiles/any/any/%(Filename)%(Extension)" />
+      </ItemGroup>
+  </Target>
 
 </Project>

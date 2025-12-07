@@ -306,6 +306,8 @@ public class WorkerProcess : IDisposable
     /// <returns>True if the worker should be recycled; otherwise, false.</returns>
     public bool ShouldRecycle()
     {
+        _logger.LogDebug("Checking if worker {WorkerId} should recycle", _workerId);
+
         // Check call count threshold
         if (_config.ProcessRecycleThreshold > 0 && _callCount >= _config.ProcessRecycleThreshold)
         {
@@ -334,8 +336,17 @@ public class WorkerProcess : IDisposable
         {
             try
             {
+                _process.Refresh();
+
                 // Check memory usage
                 var workingSetMB = _process.WorkingSet64 / (1024.0 * 1024.0);
+                _logger.LogDebug(
+                    "Worker {WorkerId}, PID {ProcessID}, memory usage: {Memory:F1}MB - Checking against max {MaxMemory}MB",
+                    _workerId,
+                    _process.Id,
+                    workingSetMB,
+                    _config.MaxMemoryMB);
+
                 if (workingSetMB > _config.MaxMemoryMB)
                 {
                     _logger.LogInformation(
