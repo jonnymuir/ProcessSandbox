@@ -6,7 +6,6 @@
     <AssemblyName>ProcessSandbox.Worker.Net48</AssemblyName>
     <IsPackable>false</IsPackable>
     <LangVersion>latest</LangVersion>
-    <IsTool>true</IsTool>
   </PropertyGroup>
 
   <ItemGroup>
