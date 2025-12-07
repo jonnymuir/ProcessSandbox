@@ -45,9 +45,11 @@ jobs:
       if: github.event_name != 'workflow_dispatch' || (github.event.inputs.action_mode == 'full-build')
       run: dotnet test --configuration Release --no-build --verbosity normal --collect:"XPlat Code Coverage"
     
-    - name: Pack
-      if: (github.ref == 'refs/heads/main') 
-      run: dotnet pack --configuration Release --no-build --output ${{ github.workspace }}\artifacts
+    - name: Pack Other Packages
+      run: dotnet pack /p:ExcludeProjects="**/ProcessSandbox.Worker.csproj" --configuration Release --no-build --output ${{ github.workspace }}\artifacts
+  
+    - name: Pack Worker (Manual Nuspec)
+      run: dotnet pack src/ProcessSandbox.Worker/ProcessSandbox.Worker.nuspec --configuration Release --no-build --output ${{ github.workspace }}\artifacts
 
     - name: Push to NuGet.org
       if: (github.ref == 'refs/heads/main') 
