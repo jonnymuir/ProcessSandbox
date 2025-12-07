@@ -5,6 +5,7 @@
     <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <PublishReadyToRun>false</PublishReadyToRun> 
+    <IsPackable>true</IsPackable>
   </PropertyGroup>
 
   <ItemGroup>
@@ -24,21 +25,28 @@
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.0" />
   </ItemGroup>
 
-  <Target Name="AddWorkerAssetsToPackage" AfterTargets="Build">
+<Target Name="AddWorkerAssetsToPackage" BeforeTargets="GenerateNuspec">
     <ItemGroup>
-        <WorkerHostFiles Include="$(TargetDir)ProcessSandbox.Worker.deps.json" />
-        <WorkerHostFiles Include="$(TargetDir)ProcessSandbox.Worker.runtimeconfig.json" />
-        <WorkerHostFiles Include="$(TargetDir)ProcessSandbox.Worker" /> 
-        <WorkerHostFiles Include="$(TargetDir)ProcessSandbox.Worker.exe" /> 
-    </ItemGroup>
-
-    <ItemGroup>
-        <Content Include="@(WorkerHostFiles)"
-                 Condition="Exists('%(Identity)')"
-                 PackageCopyToOutput="true">
+        <Content Include="$(TargetDir)ProcessSandbox.Worker.deps.json" Condition="Exists('$(TargetDir)ProcessSandbox.Worker.deps.json')">
+            <Pack>true</Pack>
+            <PackageCopyToOutput>true</PackageCopyToOutput>
+            <PackagePath>contentFiles/any/any/$(TargetFramework)/%(Filename)%(Extension)</PackagePath>
+        </Content>
+        <Content Include="$(TargetDir)ProcessSandbox.Worker.runtimeconfig.json" Condition="Exists('$(TargetDir)ProcessSandbox.Worker.runtimeconfig.json')">
+            <Pack>true</Pack>
+            <PackageCopyToOutput>true</PackageCopyToOutput>
+            <PackagePath>contentFiles/any/any/$(TargetFramework)/%(Filename)%(Extension)</PackagePath>
+        </Content>
+        <Content Include="$(TargetDir)ProcessSandbox.Worker" Condition="Exists('$(TargetDir)ProcessSandbox.Worker')">
+            <Pack>true</Pack>
+            <PackageCopyToOutput>true</PackageCopyToOutput>
+            <PackagePath>contentFiles/any/any/$(TargetFramework)/%(Filename)%(Extension)</PackagePath>
+        </Content>
+        <Content Include="$(TargetDir)ProcessSandbox.Worker.exe" Condition="Exists('$(TargetDir)ProcessSandbox.Worker.exe')">
+            <Pack>true</Pack>
+            <PackageCopyToOutput>true</PackageCopyToOutput>
             <PackagePath>contentFiles/any/any/$(TargetFramework)/%(Filename)%(Extension)</PackagePath>
         </Content>
     </ItemGroup>
 </Target>
-
 </Project>

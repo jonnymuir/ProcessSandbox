@@ -47,7 +47,7 @@ jobs:
     
     - name: Pack
       if: (github.ref == 'refs/heads/main') 
-      run: dotnet pack --configuration Release --no-build --output ${{ github.workspace }}\artifacts
+      run: dotnet pack ProcessSandbox.Worker.nuspec --configuration Release --no-build --output ${{ github.workspace }}\artifacts
 
     - name: Push to NuGet.org
       if: (github.ref == 'refs/heads/main') 
