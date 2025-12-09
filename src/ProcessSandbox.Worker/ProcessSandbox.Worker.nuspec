@@ -35,19 +35,14 @@
                     exclude="Build,Analyzers" />
             </group>
         </dependencies>
-        <contentFiles>
-            <files include="lib/net8.0/ProcessSandbox.Worker.runtimeconfig.json" buildAction="None"
-                copyToOutput="true" />
-            <files include="lib/net8.0/ProcessSandbox.Worker.deps.json" buildAction="None"
-                copyToOutput="true" />
-            <files include="lib/net10.0/ProcessSandbox.Worker.runtimeconfig.json" buildAction="None"
-                copyToOutput="true" />
-            <files include="lib/net10.0/ProcessSandbox.Worker.deps.json" buildAction="None"
-                copyToOutput="true" />
-        </contentFiles>
-
+        <contentFiles> <!-- Include Assets as Content --> 
+            <files include="any/**/*.*" buildAction="None" copyToOutput="true"/> 
+        </contentFiles> 
     </metadata>
     <files>
-        <file src="bin\$configuration$\net8.0\**" target="lib\net8.0\" />
+        <file src="bin\$configuration$\net8.0\**" exclude="**\*.pdb" target="lib\net8.0\" />
+        <file src="bin\$configuration$\net10.0\**" exclude="**\*.pdb" target="lib\net10.0\" />
+        <file src="bin\$configuration$\net8.0\ProcessSandbox.Worker.runtimeconfig.json" target="contentFiles\any\net8.0\" />
+        <file src="bin\$configuration$\net10.0\ProcessSandbox.Worker.runtimeconfig.json" target="contentFiles\any\net10.0\" />
     </files>
 </package>
