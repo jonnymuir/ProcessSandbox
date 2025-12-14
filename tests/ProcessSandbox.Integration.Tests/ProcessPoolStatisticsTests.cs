@@ -26,7 +26,7 @@ public class ProcessPoolStatisticsTests
         _loggerFactory = LoggerFactory.Create(builder =>
         {
             // Minimum level for logging (e.g., Information, Debug, or Trace)
-            builder.SetMinimumLevel(LogLevel.Debug);
+            builder.SetMinimumLevel(LogLevel.Information);
 
             // Add the Debug provider
             builder.AddDebug();

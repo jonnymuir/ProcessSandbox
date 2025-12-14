@@ -7,7 +7,7 @@ using ProcessSandbox.Proxy;
 using var loggerFactory = LoggerFactory.Create(builder =>
 {
     builder.AddConsole();
-    builder.SetMinimumLevel(LogLevel.Debug); // Only show warnings/errors from the pool
+    builder.SetMinimumLevel(LogLevel.Warning); // Only show warnings/errors from the pool
 });
 
 // 2. Configure the Pool
