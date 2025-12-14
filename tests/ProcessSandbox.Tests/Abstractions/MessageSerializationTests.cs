@@ -124,21 +124,6 @@ public class MessageSerializationTests
         Assert.Equal(MessageType.Shutdown, message.MessageType);
         Assert.Empty(message.Payload);
     }
-
-    /// <summary>
-    /// Tests that IpcMessage creates ping and pong messages correctly.
-    /// </summary>
-    [Fact]
-    public void IpcMessage_PingPong_RoundTrip()
-    {
-        // Act
-        var ping = IpcMessage.CreatePing();
-        var pong = IpcMessage.CreatePong();
-
-        // Assert
-        Assert.Equal(MessageType.Ping, ping.MessageType);
-        Assert.Equal(MessageType.Pong, pong.MessageType);
-    }
 }
 
 /// <summary>

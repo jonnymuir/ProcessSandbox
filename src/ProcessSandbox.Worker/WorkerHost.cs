@@ -146,10 +146,6 @@ public class WorkerHost(WorkerConfiguration config, ILoggerFactory loggerFactory
                     .ConfigureAwait(false);
                 break;
 
-            case MessageType.Ping:
-                await HandlePingAsync().ConfigureAwait(false);
-                break;
-
             case MessageType.Shutdown:
                 _logger.LogInformation("Shutdown message received");
                 await StopAsync().ConfigureAwait(false);
@@ -163,11 +159,6 @@ public class WorkerHost(WorkerConfiguration config, ILoggerFactory loggerFactory
 
     private async Task HandleMethodInvocationAsync(MethodInvocationMessage invocation)
     {
-        _logger.LogDebug(
-            "Processing method invocation: {Method} (correlation: {CorrelationId})",
-            invocation.MethodName,
-            invocation.CorrelationId);
-
         MethodResultMessage result;
 
         try
@@ -187,32 +178,11 @@ public class WorkerHost(WorkerConfiguration config, ILoggerFactory loggerFactory
             var resultMessage = IpcMessage.FromMethodResult(result);
             await _channel!.SendMessageAsync(resultMessage, _shutdownCts.Token)
                 .ConfigureAwait(false);
-
-            _logger.LogDebug(
-                "Method result sent: {Success} (correlation: {CorrelationId})",
-                result.Success,
-                result.CorrelationId);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error sending method result");
             throw;
-        }
-    }
-
-    private async Task HandlePingAsync()
-    {
-        _logger.LogDebug("Ping received, sending pong");
-
-        try
-        {
-            var pong = IpcMessage.CreatePong();
-            await _channel!.SendMessageAsync(pong, _shutdownCts.Token)
-                .ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error sending pong");
         }
     }
 

@@ -1,29 +1,32 @@
 using System;
-using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using ProcessSandbox.Abstractions;
 using ProcessSandbox.Abstractions.Messages;
 
 namespace ProcessSandbox.IPC;
 
 /// <summary>
-/// Wraps an IPC channel with request-response pattern support.
-/// Handles correlation of requests and responses using correlation IDs.
+/// Wraps an IPC channel with a simplified single-request-response pattern.
+/// Optimized for workers that handle exactly one invocation at a time.
 /// </summary>
 public class RequestResponseChannel : IDisposable
 {
     private readonly IIpcChannel _channel;
-    private readonly ConcurrentDictionary<Guid, TaskCompletionSource<MethodResultMessage>> _pendingRequests;
     private readonly CancellationTokenSource _receiverCts;
     private readonly Task _receiverTask;
+    private readonly ILogger _logger;
+
+    // Single-flight state management
+    private TaskCompletionSource<MethodResultMessage>? _currentRequest;
+    private readonly object _requestLock = new();
     private bool _disposed;
 
     /// <summary>
-    /// Gets whether the channel is connected.
+    /// Gets whether the underlying channel is connected.
     /// </summary>
     public bool IsConnected => _channel.IsConnected;
-
     /// <summary>
     /// Gets the channel ID.
     /// </summary>
@@ -35,28 +38,24 @@ public class RequestResponseChannel : IDisposable
     public event EventHandler<ChannelDisconnectedEventArgs>? Disconnected;
 
     /// <summary>
-    /// Creates a new request-response channel.
+    /// Creates a new RequestResponseChannel wrapping the given IPC channel.
     /// </summary>
-    /// <param name="channel">The underlying IPC channel.</param>
-    public RequestResponseChannel(IIpcChannel channel)
+    /// <param name="channel"></param>
+    /// <param name="logger"></param>
+    public RequestResponseChannel(IIpcChannel channel, ILogger logger)
     {
-        _channel = channel ?? throw new ArgumentNullException(nameof(channel));
-        _pendingRequests = new ConcurrentDictionary<Guid, TaskCompletionSource<MethodResultMessage>>();
+        _logger = logger;
+        _channel = channel;
         _receiverCts = new CancellationTokenSource();
 
-        // Subscribe to disconnection events
         _channel.Disconnected += OnChannelDisconnected;
-
-        // Start receiver task
         _receiverTask = Task.Run(ReceiverLoop);
     }
 
     /// <summary>
-    /// Sends a method invocation request and waits for the result.
+    /// Sends a method invocation and waits for the result.
+    /// Enforces single-flight execution via internal locking.
     /// </summary>
-    /// <param name="invocation">The method invocation message.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>The method result.</returns>
     public async Task<MethodResultMessage> SendRequestAsync(
         MethodInvocationMessage invocation,
         CancellationToken cancellationToken = default)
@@ -68,99 +67,82 @@ public class RequestResponseChannel : IDisposable
             throw new IpcException("Channel is not connected");
 
         var tcs = new TaskCompletionSource<MethodResultMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
-        
-        if (!_pendingRequests.TryAdd(invocation.CorrelationId, tcs))
-            throw new InvalidOperationException($"Duplicate correlation ID: {invocation.CorrelationId}");
+
+        // Ensure no other thread is currently using this channel instance
+        lock (_requestLock)
+        {
+            if (_currentRequest != null)
+            {
+                throw new InvalidOperationException(
+                    $"Concurrency violation: Channel {ChannelId} is already processing a request. " +
+                    "Ensure WorkerProcess locking is functioning correctly.");
+            }
+            _currentRequest = tcs;
+        }
 
         try
         {
-            // Send the request
             var message = IpcMessage.FromMethodInvocation(invocation);
             await _channel.SendMessageAsync(message, cancellationToken).ConfigureAwait(false);
 
-            // Wait for response with timeout
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeoutCts.CancelAfter(invocation.TimeoutMilliseconds);
 
-            var cancelTask = Task.Delay(Timeout.Infinite, timeoutCts.Token);
-            var completedTask = await Task.WhenAny(tcs.Task, cancelTask).ConfigureAwait(false);
+            // Wait for either the result, a timeout, or the receiver loop failing
+            var delayTask = Task.Delay(Timeout.Infinite, timeoutCts.Token);
+            var completedTask = await Task.WhenAny(tcs.Task, delayTask).ConfigureAwait(false);
 
-            if (completedTask == cancelTask)
+            if (completedTask == delayTask)
             {
-                // Timeout or cancellation
                 throw new MethodTimeoutException(
                     invocation.MethodName,
                     TimeSpan.FromMilliseconds(invocation.TimeoutMilliseconds));
             }
 
-            return await tcs.Task.ConfigureAwait(false);
+            _logger.LogDebug(
+                "Method {MethodName} on channel {ChannelId} completed",
+                invocation.MethodName,
+                ChannelId);
+            return await tcs.Task;
         }
         finally
         {
-            _pendingRequests.TryRemove(invocation.CorrelationId, out _);
+            // Clear the request slot so the next call can proceed
+            lock (_requestLock)
+            {
+                if (_currentRequest == tcs)
+                {
+                    _currentRequest = null;
+                }
+            }
         }
     }
 
     /// <summary>
-    /// Sends a ping and waits for pong response.
+    /// Closes the channel and stops the receiver loop.
     /// </summary>
-    /// <param name="timeoutMs">Timeout in milliseconds.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>True if pong received, false otherwise.</returns>
-    public async Task<bool> PingAsync(int timeoutMs = 5000, CancellationToken cancellationToken = default)
-    {
-        if (_disposed || !IsConnected)
-            return false;
-
-        try
-        {
-            var ping = IpcMessage.CreatePing();
-            
-            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            cts.CancelAfter(timeoutMs);
-
-            await _channel.SendMessageAsync(ping, cts.Token).ConfigureAwait(false);
-            
-            // Pong will be received by ReceiverLoop, just wait a bit
-            await Task.Delay(100, cts.Token).ConfigureAwait(false);
-            
-            return IsConnected;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// Closes the channel gracefully.
-    /// </summary>
+    /// <returns></returns>
     public async Task CloseAsync()
     {
-        if (_disposed)
-            return;
+        if (_disposed) return;
 
-        // Cancel all pending requests
-        foreach (var kvp in _pendingRequests)
+        _logger.LogDebug("Closing RequestResponseChannel {ChannelId}", ChannelId);
+
+        while(!_currentRequest?.Task.IsCompleted ?? false)
         {
-            kvp.Value.TrySetException(new IpcException("Channel closed"));
+            await Task.Delay(50).ConfigureAwait(false);
         }
-        _pendingRequests.Clear();
+        // Fail the active request immediately so the caller doesn't hang
+        FailPendingRequest(new IpcException("Channel is being closed by the host."));
 
-        // Stop receiver
         _receiverCts.Cancel();
-
-        // Close underlying channel
         await _channel.CloseAsync().ConfigureAwait(false);
 
         try
         {
             await _receiverTask.ConfigureAwait(false);
         }
-        catch (OperationCanceledException)
-        {
-            // Expected
-        }
+        catch (OperationCanceledException) { /* Expected */ }
     }
 
     private async Task ReceiverLoop()
@@ -170,89 +152,80 @@ public class RequestResponseChannel : IDisposable
             while (!_receiverCts.Token.IsCancellationRequested && IsConnected)
             {
                 IpcMessage? message;
-                
                 try
                 {
-                    message = await _channel.ReceiveMessageAsync(_receiverCts.Token)
-                        .ConfigureAwait(false);
+                    message = await _channel.ReceiveMessageAsync(_receiverCts.Token).ConfigureAwait(false);
                 }
-                catch (OperationCanceledException)
-                {
-                    break;
-                }
+                catch (OperationCanceledException) { break; }
                 catch (Exception ex)
                 {
-                    // Channel error, exit loop
-                    FailAllPendingRequests(new IpcException("Receiver loop failed", ex));
+                    FailPendingRequest(new IpcException("Receiver loop encountered an error.", ex));
                     break;
                 }
 
                 if (message == null)
                 {
-                    // Channel closed
-                    FailAllPendingRequests(new IpcException("Channel closed unexpectedly"));
+                    FailPendingRequest(new IpcException("Underlying IPC channel was closed (Stream ended)."));
                     break;
                 }
 
-                // Handle the message
                 HandleReceivedMessage(message);
             }
         }
         finally
         {
-            // Make sure all pending requests are failed
-            FailAllPendingRequests(new IpcException("Receiver loop terminated"));
+            FailPendingRequest(new IpcException("Receiver loop terminated."));
         }
     }
 
     private void HandleReceivedMessage(IpcMessage message)
     {
-        switch (message.MessageType)
+        _logger.LogDebug("Received IPC message of type {MessageType} on channel {ChannelId}", message.MessageType, ChannelId);
+        if (message.MessageType == MessageType.MethodResult)
         {
-            case MessageType.MethodResult:
-                HandleMethodResult(message.GetMethodResult());
-                break;
+            var result = message.GetMethodResult();
+            var tcs = Interlocked.Exchange(ref _currentRequest, null);
 
-            case MessageType.Pong:
-                // Pong received, channel is alive
-                break;
-
-            case MessageType.Shutdown:
-                // Graceful shutdown request
-                _ = CloseAsync();
-                break;
-
-            default:
-                // Unexpected message type, ignore
-                break;
+            if (tcs != null)
+            {
+                tcs.TrySetResult(result);
+            }
+            else
+            {
+                _logger.LogWarning("Received result for CorrelationId {Id} but no request was pending.", result.CorrelationId);
+            }
+        }
+        else if (message.MessageType == MessageType.Shutdown)
+        {
+            _logger.LogInformation("Received shutdown message from remote channel.");
+            _ = CloseAsync();
         }
     }
 
-    private void HandleMethodResult(MethodResultMessage result)
+    private void FailPendingRequest(Exception exception)
     {
-        if (_pendingRequests.TryRemove(result.CorrelationId, out var tcs))
-        {
-            tcs.TrySetResult(result);
-        }
-        // else: result for unknown request, ignore
-    }
+        // Capture the current request and null it out atomically
+        var tcs = Interlocked.Exchange(ref _currentRequest, null);
 
-    private void FailAllPendingRequests(Exception exception)
-    {
-        foreach (var kvp in _pendingRequests)
+        if (tcs != null && tcs.Task.IsCompleted == false)
         {
-            kvp.Value.TrySetException(exception);
+            _logger.LogDebug(
+                "Failing pending IPC request. \nid: {id} \nReason: {Message} \nSource Exception Stack: {ExStack} \nTrigger Stack: {CurrentStack}",
+                this.ChannelId,
+                exception.Message,
+                exception.StackTrace ?? "N/A",
+                Environment.StackTrace);
+
+            tcs.TrySetException(exception);
         }
-        _pendingRequests.Clear();
     }
 
     private void OnChannelDisconnected(object? sender, ChannelDisconnectedEventArgs e)
     {
-        if(e.Exception == null) {
-            FailAllPendingRequests(new IpcException($"Channel disconnected: {e.Reason}"));
-        } else {
-            FailAllPendingRequests(new IpcException($"Channel disconnected: {e.Reason}", e.Exception));
-        }   
+        var message = $"Channel disconnected. Reason: {e.Reason}";
+        var ex = e.Exception != null ? new IpcException(message, e.Exception) : new IpcException(message);
+
+        FailPendingRequest(ex);
         Disconnected?.Invoke(this, e);
     }
 
@@ -261,25 +234,16 @@ public class RequestResponseChannel : IDisposable
     /// </summary>
     public void Dispose()
     {
-        if (_disposed)
-            return;
-
+        if (_disposed) return;
         _disposed = true;
 
         _channel.Disconnected -= OnChannelDisconnected;
-        
-        _receiverCts?.Cancel();
-        _receiverCts?.Dispose();
+        _receiverCts.Cancel();
 
-        try
-        {
-            _receiverTask?.Wait(1000);
-        }
-        catch
-        {
-            // Ignore
-        }
+        // Non-async cleanup
+        FailPendingRequest(new ObjectDisposedException(nameof(RequestResponseChannel)));
 
-        _channel?.Dispose();
+        _receiverCts.Dispose();
+        _channel.Dispose();
     }
 }

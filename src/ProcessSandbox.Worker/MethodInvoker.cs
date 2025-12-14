@@ -27,11 +27,6 @@ public class MethodInvoker(object targetInstance, ILogger<MethodInvoker> logger)
     {
         try
         {
-            logger.LogDebug(
-                "Invoking method: {Method} with {ParamCount} parameters",
-                invocation.MethodName,
-                invocation.ParameterTypeNames.Length);
-
             // Resolve parameter types
             var parameterTypes = SerializationHelper.ResolveTypes(invocation.ParameterTypeNames);
 
@@ -57,8 +52,6 @@ public class MethodInvoker(object targetInstance, ILogger<MethodInvoker> logger)
             var resultTypeName = method.ReturnType == typeof(void)
                 ? null
                 : SerializationHelper.GetTypeName(method.ReturnType);
-
-            logger.LogDebug("Method invoked successfully: {Method}", invocation.MethodName);
 
             return MethodResultMessage.CreateSuccess(
                 invocation.CorrelationId,

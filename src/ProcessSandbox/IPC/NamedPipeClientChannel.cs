@@ -168,7 +168,7 @@ public class NamedPipeClientChannel(string pipeName, string serverName = ".") : 
             }
         }
 
-        HandleDisconnection("Channel closed", null, expected: true);
+        HandleDisconnection("Channel closed Client", null, expected: true);
     }
 
     /// <summary>

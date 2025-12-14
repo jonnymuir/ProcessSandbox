@@ -23,6 +23,8 @@ public class ProcessPool : IDisposable
     private readonly ConcurrentDictionary<string, WorkerProcess> _allWorkers;
     private readonly SemaphoreSlim _poolLock;
     private readonly CancellationTokenSource _disposalCts;
+    private readonly SemaphoreSlim _requestThrottle;
+    private readonly SemaphoreSlim _startupThrottle;
     private bool _disposed;
 
     /// <summary>
@@ -52,6 +54,10 @@ public class ProcessPool : IDisposable
         _allWorkers = new ConcurrentDictionary<string, WorkerProcess>();
         _poolLock = new SemaphoreSlim(1, 1);
         _disposalCts = new CancellationTokenSource();
+
+        _requestThrottle = new SemaphoreSlim(_config.MaxPoolSize, _config.MaxPoolSize);
+
+        _startupThrottle = new SemaphoreSlim(3, 3);
 
         _logger.LogInformation(
             "Process pool created: Min={MinPoolSize}, Max={MaxPoolSize}",
@@ -113,12 +119,23 @@ public class ProcessPool : IDisposable
         if (invocation == null)
             throw new ArgumentNullException(nameof(invocation));
 
+        await _requestThrottle.WaitAsync(cancellationToken);
+
         WorkerProcess? worker = null;
 
         try
         {
             // Get an available worker
+            _logger.LogDebug(
+                "Acquiring worker for method {Method}",
+                invocation.MethodName);
+            
             worker = await GetAvailableWorkerAsync(cancellationToken);
+
+            _logger.LogDebug(
+                "Acquired worker {WorkerId} for method {Method}",
+                worker.WorkerId,
+                invocation.MethodName);
 
             _logger.LogDebug(
                 "Executing method {Method} on worker {WorkerId}",
@@ -135,10 +152,7 @@ public class ProcessPool : IDisposable
                     "Worker {WorkerId} needs recycling, starting replacement",
                     worker.WorkerId);
 
-                _ = Task.Run(async () =>
-                {
-                    await RecycleWorkerAsync(worker);
-                }, _disposalCts.Token);
+                await RecycleWorkerAsync(worker);
             }
             else
             {
@@ -164,6 +178,10 @@ public class ProcessPool : IDisposable
 
             throw;
         }
+        finally
+        {
+            _requestThrottle.Release();
+        }
     }
 
     private async Task<WorkerProcess> GetAvailableWorkerAsync(CancellationToken cancellationToken)
@@ -176,6 +194,7 @@ public class ProcessPool : IDisposable
             // Try to get an available worker
             if (_availableWorkers.TryTake(out var worker))
             {
+                _logger.LogDebug("Acquired worker {WorkerId} from pool", worker.WorkerId);
                 if (worker.IsHealthy)
                 {
                     return worker;
@@ -191,14 +210,7 @@ public class ProcessPool : IDisposable
             {
                 if (_allWorkers.Count < _config.MaxPoolSize)
                 {
-                    _logger.LogInformation(
-                        "Creating new worker (current: {Current}, max: {Max})",
-                        _allWorkers.Count,
-                        _config.MaxPoolSize);
-
                     var newWorker = await CreateWorkerAsync(cancellationToken);
-
-                    _allWorkers.TryAdd(newWorker.WorkerId, newWorker);
                     ReturnWorker(newWorker);
                     return newWorker;
                 }
@@ -209,9 +221,10 @@ public class ProcessPool : IDisposable
             }
 
             // Pool is at max capacity, wait a bit and retry
-            _logger.LogDebug("Pool at capacity, waiting for available worker (attempt {Attempt})", attempt + 1);
-            await Task.Delay(100, cancellationToken);
             attempt++;
+            _logger.LogDebug("Pool at capacity, waiting for available worker (attempt {Attempt})", attempt);
+            await Task.Delay(100 * attempt, cancellationToken);
+
         }
 
         throw new PoolExhaustedException(_config.MaxPoolSize);
@@ -219,14 +232,24 @@ public class ProcessPool : IDisposable
 
     private async Task<WorkerProcess> CreateWorkerAsync(CancellationToken cancellationToken)
     {
-        var worker = new WorkerProcess(_config, _loggerFactory.CreateLogger<WorkerProcess>());
-        worker.Failed += OnWorkerFailed;
+        await _startupThrottle.WaitAsync(cancellationToken);
 
-        await worker.StartAsync(cancellationToken);
+        try
+        {
+            var worker = new WorkerProcess(_config, _loggerFactory.CreateLogger<WorkerProcess>());
+            worker.Failed += OnWorkerFailed;
 
-        _allWorkers.TryAdd(worker.WorkerId, worker);
+            await worker.StartAsync(cancellationToken);
 
-        return worker;
+            _allWorkers.TryAdd(worker.WorkerId, worker);
+
+            return worker;
+        }
+        finally
+        {
+            // *** NEW: Release startup slot ***
+            _startupThrottle.Release();
+        }
     }
 
     private void ReturnWorker(WorkerProcess worker)
@@ -294,7 +317,7 @@ public class ProcessPool : IDisposable
     private void OnWorkerFailed(object? sender, WorkerFailedEventArgs e)
     {
         _logger.LogWarning(
-            "Worker {WorkerId} failed: {Reason}",
+            "Worker failed. WorkerId: {WorkerId} Reason: {Reason}",
             e.WorkerId,
             e.Reason);
 

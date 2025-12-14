@@ -7,7 +7,7 @@ using ProcessSandbox.Proxy;
 using var loggerFactory = LoggerFactory.Create(builder =>
 {
     builder.AddConsole();
-    builder.SetMinimumLevel(LogLevel.Warning); // Only show warnings/errors from the pool
+    builder.SetMinimumLevel(LogLevel.Debug); // Only show warnings/errors from the pool
 });
 
 // 2. Configure the Pool
@@ -38,24 +38,15 @@ var iteration = 1;
 
 while (true)
 {
-    try
-    {
-        // A. Invoke the bad code
-        Console.ForegroundColor = ConsoleColor.Cyan;
-        Console.Write($"\n[Call #{iteration}] Sending request... ");
-        
-        // This call happens in the worker process
-        proxy.LeakMemory(10); // Leak 10MB per call
+    // A. Invoke the bad code
+    Console.ForegroundColor = ConsoleColor.Cyan;
+    Console.Write($"\n[Call #{iteration}] Sending request... ");
+    
+    // This call happens in the worker process
+    proxy.LeakMemory(10); // Leak 10MB per call
 
-        var info = proxy.GetProcessInfo(); 
-        Console.ForegroundColor = ConsoleColor.Green;
-        Console.WriteLine($"Success (Worker PID: {info.ProcessId}, Used: {info.MemoryMB}MB)");
-        iteration++;
-        await Task.Delay(100); // Wait a bit to watch the show
-    }
-    catch (Exception ex)
-    {
-        Console.ForegroundColor = ConsoleColor.Red;
-        Console.WriteLine($"❌ Error: {ex.Message}");
-    }
+    var info = proxy.GetProcessInfo(); 
+    Console.ForegroundColor = ConsoleColor.Green;
+    Console.WriteLine($"Success (Worker PID: {info.ProcessId}, Used: {info.MemoryMB}MB)");
+    iteration++;
 }

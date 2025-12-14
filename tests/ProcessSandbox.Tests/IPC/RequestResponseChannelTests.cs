@@ -7,6 +7,7 @@ using MessagePack;
 using ProcessSandbox.IPC;
 using ProcessSandbox.Abstractions.Messages;
 using ProcessSandbox.Abstractions;
+using Microsoft.Extensions.Logging;
 
 namespace ProcessSandbox.Tests.IPC;
 
@@ -15,6 +16,25 @@ namespace ProcessSandbox.Tests.IPC;
 /// </summary>
 public class RequestResponseChannelTests
 {
+    private readonly ILoggerFactory _loggerFactory;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="RequestResponseChannelTests"/> class.
+    /// </summary>
+    public RequestResponseChannelTests()
+    {
+        _loggerFactory = LoggerFactory.Create(builder =>
+        {
+            // Minimum level for logging (e.g., Information, Debug, or Trace)
+            builder.SetMinimumLevel(LogLevel.Debug);
+
+            // Add the Debug provider
+            builder.AddConsole();
+        });
+
+    }
+
+
     /// <summary>
     /// Tests that sending a request and receiving a response works correctly.
     /// </summary>
@@ -31,7 +51,7 @@ public class RequestResponseChannelTests
         await client.ConnectAsync();
         await serverTask;
 
-        using var requestResponseChannel = new RequestResponseChannel(client);
+        using var requestResponseChannel = new RequestResponseChannel(client, _loggerFactory.CreateLogger<RequestResponseChannel>());
 
         var invocation = new MethodInvocationMessage(Guid.NewGuid(), "TestMethod", 5000);
 
@@ -75,7 +95,7 @@ public class RequestResponseChannelTests
         await client.ConnectAsync();
         await serverTask;
 
-        using var requestResponseChannel = new RequestResponseChannel(client);
+        using var requestResponseChannel = new RequestResponseChannel(client, _loggerFactory.CreateLogger<RequestResponseChannel>());
 
         var invocation = new MethodInvocationMessage(Guid.NewGuid(), "SlowMethod", 500);
 
@@ -86,38 +106,4 @@ public class RequestResponseChannelTests
             () => requestResponseChannel.SendRequestAsync(invocation));
     }
 
-    /// <summary>
-    /// Tests that sending a ping receives a pong response.
-    /// </summary>
-    [Fact]
-    public async Task Ping_ReceivesResponse_ReturnsTrue()
-    {
-        // Arrange
-        var pipeName = PipeNameGenerator.Generate();
-        using var server = new NamedPipeServerChannel(pipeName);
-        using var client = new NamedPipeClientChannel(pipeName);
-
-        var serverTask = server.WaitForConnectionAsync();
-        await Task.Delay(100);
-        await client.ConnectAsync();
-        await serverTask;
-
-        using var requestResponseChannel = new RequestResponseChannel(client);
-
-        // Start echo task on server
-        _ = Task.Run(async () =>
-        {
-            var msg = await server.ReceiveMessageAsync();
-            if (msg?.MessageType == MessageType.Ping)
-            {
-                await server.SendMessageAsync(IpcMessage.CreatePong());
-            }
-        });
-
-        // Act
-        var result = await requestResponseChannel.PingAsync();
-
-        // Assert
-        Assert.True(result);
-    }
 }

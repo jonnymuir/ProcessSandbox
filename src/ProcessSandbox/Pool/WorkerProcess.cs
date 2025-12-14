@@ -13,18 +13,22 @@ namespace ProcessSandbox.Pool;
 /// <summary>
 /// Represents a single worker process in the pool.
 /// </summary>
-public class WorkerProcess : IDisposable
+/// <remarks>
+/// Initializes a new instance of the <see cref="WorkerProcess"/> class.
+/// </remarks>
+/// <param name="config">The process pool configuration.</param>
+/// <param name="logger">The logger instance.</param>
+public class WorkerProcess(ProcessPoolConfiguration config, ILogger<WorkerProcess> logger) : IDisposable
 {
-    private readonly ProcessPoolConfiguration _config;
-    private readonly ILogger<WorkerProcess> _logger;
-    private readonly string _workerId;
-    private readonly DateTime _startTime;
+    private readonly string _workerId = Guid.NewGuid().ToString("N");
+    private readonly DateTime _startTime = DateTime.UtcNow;
 
     private Process? _process;
     private RequestResponseChannel? _channel;
     private int _callCount;
     private bool _disposed;
-    private readonly SemaphoreSlim _usageLock;
+    private int _recycleCount = 0;
+    private readonly SemaphoreSlim _usageLock = new SemaphoreSlim(1, 1);
 
     private TaskCompletionSource<bool> _workerReadyTcs = null!;
 
@@ -64,20 +68,6 @@ public class WorkerProcess : IDisposable
     public event EventHandler<WorkerFailedEventArgs>? Failed;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="WorkerProcess"/> class.
-    /// </summary>
-    /// <param name="config">The process pool configuration.</param>
-    /// <param name="logger">The logger instance.</param>
-    public WorkerProcess(ProcessPoolConfiguration config, ILogger<WorkerProcess> logger)
-    {
-        _config = config ?? throw new ArgumentNullException(nameof(config));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _workerId = Guid.NewGuid().ToString("N");
-        _startTime = DateTime.UtcNow;
-        _usageLock = new SemaphoreSlim(1, 1);
-    }
-
-    /// <summary>
     /// Starts the worker process and establishes communication.
     /// </summary>
     /// <param name="cancellationToken">Cancellation token.</param>
@@ -90,7 +80,7 @@ public class WorkerProcess : IDisposable
         if (_process != null)
             throw new InvalidOperationException("Worker already started");
 
-        _logger.LogInformation("Starting worker process {WorkerId}", _workerId);
+        logger.LogInformation("Starting worker process {WorkerId}", _workerId);
 
         try
         {
@@ -108,10 +98,10 @@ public class WorkerProcess : IDisposable
             // Create worker configuration
             var workerConfig = new WorkerConfiguration
             {
-                AssemblyPath = _config.ImplementationAssemblyPath,
-                TypeName = _config.ImplementationTypeName,
+                AssemblyPath = config.ImplementationAssemblyPath,
+                TypeName = config.ImplementationTypeName,
                 PipeName = pipeName,
-                VerboseLogging = _config.VerboseWorkerLogging,
+                VerboseLogging = config.VerboseWorkerLogging,
                 ParentProcessId = currentProcessId
             };
 
@@ -124,7 +114,7 @@ public class WorkerProcess : IDisposable
 
             string fileName;
             string arguments;
-            if (_config.UseDotNetFrameworkWorker)
+            if (config.UseDotNetFrameworkWorker)
             {
                 fileName = Path.Combine(AppContext.BaseDirectory, "ProcessSandbox.Worker.Net48.exe");
                 arguments = $"--config {configBase64}";
@@ -147,8 +137,6 @@ public class WorkerProcess : IDisposable
                 RedirectStandardError = true
             };
 
-            _logger.LogDebug("ProcessStartInfo fileName: {fileName}, arguments: {arguments}", fileName, arguments);
-
             _process = new Process { StartInfo = startInfo };
             _process.Exited += OnProcessExited;
             _process.EnableRaisingEvents = true;
@@ -162,7 +150,6 @@ public class WorkerProcess : IDisposable
                     {
                         _workerReadyTcs.TrySetResult(true);
                     }
-                    _logger.LogDebug("[Worker {WorkerId}] {Output}", _workerId, e.Data);
                 }
             };
 
@@ -170,7 +157,7 @@ public class WorkerProcess : IDisposable
             {
                 if (!string.IsNullOrEmpty(e.Data))
                 {
-                    _logger.LogError("[Worker {WorkerId}] {Error}", _workerId, e.Data);
+                    logger.LogError("[Worker {WorkerId}] {Error}", _workerId, e.Data);
                     Cleanup();
                 }
             };
@@ -181,14 +168,14 @@ public class WorkerProcess : IDisposable
             _process.BeginOutputReadLine();
             _process.BeginErrorReadLine();
 
-            _logger.LogInformation(
+            logger.LogInformation(
                 "Worker process started: {WorkerId}, PID: {ProcessId}",
                 _workerId,
                 _process.Id);
 
             // --- Wait for the worker to signal it is listening on the pipe ---
             using var startupTimeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            startupTimeoutCts.CancelAfter(_config.ProcessStartTimeout);
+            startupTimeoutCts.CancelAfter(config.ProcessStartTimeout);
 
             // Wait for the worker process to report readiness
             // Wait for the worker process to report readiness
@@ -198,7 +185,7 @@ public class WorkerProcess : IDisposable
             try
             {
                 // Blocking wait for the task to complete
-                _workerReadyTcs.Task.Wait((int)_config.ProcessStartTimeout.TotalMilliseconds, startupTimeoutCts.Token);
+                _workerReadyTcs.Task.Wait((int)config.ProcessStartTimeout.TotalMilliseconds, startupTimeoutCts.Token);
             }
             catch (AggregateException ex) when (ex.InnerException is TaskCanceledException)
             {
@@ -221,36 +208,34 @@ public class WorkerProcess : IDisposable
             await _workerReadyTcs.Task.WaitAsync(startupTimeoutCts.Token)
                 .ConfigureAwait(false);
 #endif
-            _logger.LogDebug("Worker {WorkerId} signaled readiness. Proceeding to connect.", _workerId);
-
             // Connect to the worker via named pipe
             var client = new NamedPipeClientChannel(pipeName);
 
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeoutCts.CancelAfter(_config.ProcessStartTimeout);
+            timeoutCts.CancelAfter(config.ProcessStartTimeout);
 
             await client.ConnectAsync(
-                (int)_config.ProcessStartTimeout.TotalMilliseconds,
+                (int)config.ProcessStartTimeout.TotalMilliseconds,
                 timeoutCts.Token);
 
-            _channel = new RequestResponseChannel(client);
+            _channel = new RequestResponseChannel(client, logger);
             _channel.Disconnected += OnChannelDisconnected;
 
-            _logger.LogInformation("Worker {WorkerId} connected and ready", _workerId);
+            logger.LogInformation("Worker {WorkerId} connected and ready", _workerId);
         }
         catch (Exception ex) when (ex is OperationCanceledException && _process?.HasExited == false)
         {
             // Handle timeout on _workerReadyTcs.Task.WaitAsync as a startup failure
             var workerStartupEx = new WorkerStartupException(
-                $"Worker {_workerId} failed to signal readiness within {_config.ProcessStartTimeout.TotalSeconds} seconds.", ex);
+                $"Worker {_workerId} failed to signal readiness within {config.ProcessStartTimeout.TotalSeconds} seconds.", ex);
 
-            _logger.LogError(workerStartupEx, "Failed to start worker {WorkerId} (Ready Signal Timeout)", _workerId);
+            logger.LogError(workerStartupEx, "Failed to start worker {WorkerId} (Ready Signal Timeout)", _workerId);
             Cleanup();
             throw workerStartupEx;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to start worker {WorkerId}", _workerId);
+            logger.LogError(ex, "Failed to start worker {WorkerId}", _workerId);
             Cleanup();
             throw new WorkerStartupException($"Failed to start worker {_workerId}", ex);
         }
@@ -266,12 +251,18 @@ public class WorkerProcess : IDisposable
         MethodInvocationMessage invocation,
         CancellationToken cancellationToken = default)
     {
+        
+        logger.LogDebug(
+            "Invoking method {MethodName} on worker {WorkerId}",
+            invocation.MethodName,
+            _workerId);
+            
         if (_disposed)
             throw new ObjectDisposedException(nameof(WorkerProcess));
 
         if (!IsHealthy)
             throw new WorkerCrashedException("Worker is not healthy");
-
+        
         await _usageLock.WaitAsync(cancellationToken);
         try
         {
@@ -280,6 +271,11 @@ public class WorkerProcess : IDisposable
             var result = await _channel!.SendRequestAsync(invocation, cancellationToken);
 
             Interlocked.Increment(ref _callCount);
+
+            logger.LogDebug(
+                "Method {MethodName} on worker {WorkerId} completed",
+                invocation.MethodName,
+                _workerId);
 
             return result;
         }
@@ -296,28 +292,36 @@ public class WorkerProcess : IDisposable
     /// <returns>True if the worker should be recycled; otherwise, false.</returns>
     public bool ShouldRecycle()
     {
-        _logger.LogDebug("Checking if worker {WorkerId} should recycle", _workerId);
+        _recycleCount++;
+        if (_recycleCount < config.RecycleAfterCalls)
+        {
+            return false;
+        }
+
+        _recycleCount = 0;
+        
+        logger.LogDebug("Checking if worker {WorkerId} should recycle", _workerId);
 
         // Check call count threshold
-        if (_config.ProcessRecycleThreshold > 0 && _callCount >= _config.ProcessRecycleThreshold)
+        if (config.ProcessRecycleThreshold > 0 && _callCount >= config.ProcessRecycleThreshold)
         {
-            _logger.LogInformation(
+            logger.LogInformation(
                 "Worker {WorkerId} should recycle: call count {CallCount} >= {Threshold}",
                 _workerId,
                 _callCount,
-                _config.ProcessRecycleThreshold);
+                config.ProcessRecycleThreshold);
             return true;
         }
 
         // Check lifetime
         var uptime = DateTime.UtcNow - _startTime;
-        if (uptime >= _config.MaxProcessLifetime)
+        if (uptime >= config.MaxProcessLifetime)
         {
-            _logger.LogInformation(
+            logger.LogInformation(
                 "Worker {WorkerId} should recycle: uptime {Uptime} >= {MaxLifetime}",
                 _workerId,
                 uptime,
-                _config.MaxProcessLifetime);
+                config.MaxProcessLifetime);
             return true;
         }
 
@@ -330,61 +334,55 @@ public class WorkerProcess : IDisposable
 
                 // Check memory usage
                 var workingSetMB = _process.WorkingSet64 / (1024.0 * 1024.0);
-                _logger.LogDebug(
-                    "Worker {WorkerId}, PID {ProcessID}, memory usage: {Memory:F1}MB - Checking against max {MaxMemory}MB",
-                    _workerId,
-                    _process.Id,
-                    workingSetMB,
-                    _config.MaxMemoryMB);
 
-                if (workingSetMB > _config.MaxMemoryMB)
+                if (workingSetMB > config.MaxMemoryMB)
                 {
-                    _logger.LogInformation(
+                    logger.LogInformation(
                         "Worker {WorkerId} should recycle: memory {Memory:F1}MB > {MaxMemory}MB",
                         _workerId,
                         workingSetMB,
-                        _config.MaxMemoryMB);
+                        config.MaxMemoryMB);
                     return true;
                 }
 
                 // Check GDI objects
                 var gdiObjects = GetGdiObjectCount(_process);
-                if (gdiObjects > _config.MaxGdiHandles)
+                if (gdiObjects > config.MaxGdiHandles)
                 {
-                    _logger.LogInformation(
+                    logger.LogInformation(
                         "Worker {WorkerId} should recycle: GDI handles {GdiHandles} > {MaxGdiHandles}",
                         _workerId,
                         gdiObjects,
-                        _config.MaxGdiHandles);
+                        config.MaxGdiHandles);
                     return true;
                 }
 
                 // Check USER objects
                 var userObjects = GetUserObjectCount(_process);
-                if (userObjects > _config.MaxUserHandles)
+                if (userObjects > config.MaxUserHandles)
                 {
-                    _logger.LogInformation(
+                    logger.LogInformation(
                         "Worker {WorkerId} should recycle: USER handles {UserHandles} > {MaxUserHandles}",
                         _workerId,
                         userObjects,
-                        _config.MaxUserHandles);
+                        config.MaxUserHandles);
                     return true;
                 }
 
                 // Check total handles
-                if (_process.HandleCount > _config.MaxTotalHandles)
+                if (_process.HandleCount > config.MaxTotalHandles)
                 {
-                    _logger.LogInformation(
+                    logger.LogInformation(
                         "Worker {WorkerId} should recycle: total handles {TotalHandles} > {MaxTotalHandles}",
                         _workerId,
                         _process.HandleCount,
-                        _config.MaxTotalHandles);
+                        config.MaxTotalHandles);
                     return true;
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Error checking worker {WorkerId} health, marking for recycle", _workerId);
+                logger.LogWarning(ex, "Error checking worker {WorkerId} health, marking for recycle", _workerId);
                 return true; // Process is probably dead or inaccessible
             }
         }
@@ -425,7 +423,7 @@ public class WorkerProcess : IDisposable
         if (_disposed)
             return;
 
-        _logger.LogInformation("Stopping worker {WorkerId}", _workerId);
+        logger.LogInformation("Stopping worker {WorkerId}, channel {ChannelId}", _workerId, _channel?.ChannelId);
 
         try
         {
@@ -436,7 +434,7 @@ public class WorkerProcess : IDisposable
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Error closing channel for worker {WorkerId}", _workerId);
+            logger.LogWarning(ex, "Error closing channel for worker {WorkerId}", _workerId);
         }
 
         try
@@ -449,7 +447,7 @@ public class WorkerProcess : IDisposable
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Error killing worker process {WorkerId}", _workerId);
+            logger.LogWarning(ex, "Error killing worker process {WorkerId}", _workerId);
         }
 
         Cleanup();
@@ -458,7 +456,7 @@ public class WorkerProcess : IDisposable
     private void OnProcessExited(object? sender, EventArgs e)
     {
         var exitCode = _process?.ExitCode ?? -1;
-        _logger.LogWarning(
+        logger.LogWarning(
             "Worker process {WorkerId} exited with code {ExitCode}",
             _workerId,
             exitCode);
@@ -471,7 +469,7 @@ public class WorkerProcess : IDisposable
 
     private void OnChannelDisconnected(object? sender, ChannelDisconnectedEventArgs e)
     {
-        _logger.LogWarning(
+        logger.LogWarning(
             "Worker {WorkerId} channel disconnected: {Reason}",
             _workerId,
             e.Reason);
@@ -487,7 +485,7 @@ public class WorkerProcess : IDisposable
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in Failed event handler");
+            logger.LogError(ex, "Error in Failed event handler");
         }
     }
 

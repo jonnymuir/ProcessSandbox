@@ -76,6 +76,7 @@ public class WorkerRecyclingTests
             ProcessRecycleThreshold = 3,
             MethodCallTimeout = TimeSpan.FromSeconds(10),
             ProcessStartTimeout = TimeSpan.FromSeconds(10),
+            RecycleAfterCalls = 1
         };
 
         var proxy = await ProcessProxy.CreateAsync<ITestService>(config, _loggerFactory);

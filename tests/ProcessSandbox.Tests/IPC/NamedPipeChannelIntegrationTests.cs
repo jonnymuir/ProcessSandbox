@@ -38,34 +38,6 @@ public class NamedPipeChannelIntegrationTests
         Assert.True(client.IsConnected);
     }
 
-    /// <summary>
-    /// Tests that the server and client can exchange messages.    
-    /// </summary>
-    /// <returns></returns>
-    [Fact]
-    public async Task ServerAndClient_ExchangeMessages_Successfully()
-    {
-        // Arrange
-        var pipeName = PipeNameGenerator.Generate();
-        using var server = new NamedPipeServerChannel(pipeName);
-        using var client = new NamedPipeClientChannel(pipeName);
-
-        var serverTask = server.WaitForConnectionAsync();
-        await Task.Delay(100);
-        await client.ConnectAsync();
-        await serverTask;
-
-        var originalMessage = IpcMessage.CreatePing();
-
-        // Act
-        var receiveTask = server.ReceiveMessageAsync();
-        await client.SendMessageAsync(originalMessage);
-        var receivedMessage = await receiveTask;
-
-        // Assert
-        Assert.NotNull(receivedMessage);
-        Assert.Equal(MessageType.Ping, receivedMessage.MessageType);
-    }
 
     /// <summary>
     /// Tests that the server and client can exchange method invocation messages.

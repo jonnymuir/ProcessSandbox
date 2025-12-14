@@ -86,6 +86,11 @@ public class ProcessPoolConfiguration
     public bool VerboseWorkerLogging { get; set; } = false;
 
     /// <summary>
+    /// Gets or sets the number of calls after which a worker should be recycled.
+    /// </summary>
+    public int RecycleAfterCalls { get; set; } = 100;
+
+    /// <summary>
     /// Validates the configuration and throws if invalid.
     /// </summary>
     /// <exception cref="Abstractions.ConfigurationException">Thrown if configuration is invalid.</exception>

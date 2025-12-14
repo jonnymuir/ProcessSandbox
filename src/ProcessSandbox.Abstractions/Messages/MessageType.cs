@@ -24,14 +24,4 @@ public enum MessageType : byte
     /// Shutdown command from proxy to worker.
     /// </summary>
     Shutdown = 4,
-
-    /// <summary>
-    /// Ping request to check if worker is responsive.
-    /// </summary>
-    Ping = 5,
-
-    /// <summary>
-    /// Pong response to ping request.
-    /// </summary>
-    Pong = 6
 }

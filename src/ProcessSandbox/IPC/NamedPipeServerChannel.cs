@@ -153,7 +153,7 @@ public class NamedPipeServerChannel(string pipeName) : IIpcChannel
             _pipeServer.Disconnect();
         }
 
-        HandleDisconnection("Channel closed", null, expected: true);
+        HandleDisconnection("Channel closed Server", null, expected: true);
     }
 
     private void HandleDisconnection(string reason, Exception? exception, bool expected = false)

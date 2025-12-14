@@ -255,3 +255,64 @@ public class StatefulServiceImpl : ITestService
         return data;
     }
 }
+
+/// <summary>
+/// Implementation that tracks call counts.
+/// </summary>
+public class LeakyServiceImpl : ITestService
+{
+    // A static list that never gets cleared = Classic Memory Leak
+    private static readonly List<byte[]> _memoryHog = new();
+
+    /// <summary>
+    /// Echoes the input string
+    /// </summary>
+    /// <param name="input"></param>
+    /// <returns></returns>
+    public string Echo(string input)
+    {
+        // Parse input - can be in format "text" or "text:megabytes"
+        var parts = input.Split(':', 2);
+        if (parts.Length == 2 && parts[0]=="memoryleak" && int.TryParse(parts[1], out var mb) && mb > 0)
+        {
+            // Allocate unmanaged memory to simulate a heavy leak
+            var data = new byte[mb * 1024 * 1024];
+            
+            // Fill it so it actually commits to RAM
+            new Random().NextBytes(data);
+            
+            // Add to static list so GC cannot collect it
+            _memoryHog.Add(data); 
+        }
+        
+        return $"{input}";
+    }
+
+    /// <summary>
+    /// Adds two integers
+    /// </summary>
+    /// <param name="a"></param>
+    /// <param name="b"></param>
+    /// <returns></returns>
+    public int Add(int a, int b)
+    {
+        return a + b;
+    }
+
+    /// <summary>
+    /// Does nothing 
+    /// </summary>
+    public void DoNothing()
+    {
+    }
+
+    /// <summary>
+    /// Processes a byte array
+    /// </summary>
+    /// <param name="data"></param>
+    /// <returns></returns>
+    public byte[] ProcessBytes(byte[] data)
+    {
+        return data;
+    }
+}

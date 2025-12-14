@@ -155,8 +155,6 @@ public class ProcessProxyDispatcher<TInterface> : DispatchProxy where TInterface
             SerializedParameters = SerializationHelper.SerializeParameters(parameters)
         };
 
-        _logger.LogDebug("Invoking method: {Method}", targetMethod.Name);
-
         // Execute synchronously or asynchronously based on return type
         if (typeof(Task).IsAssignableFrom(targetMethod.ReturnType))
         {
@@ -170,8 +168,9 @@ public class ProcessProxyDispatcher<TInterface> : DispatchProxy where TInterface
 
     private object? InvokeSyncMethod(MethodInvocationMessage invocation, Type returnType)
     {
+        _logger!.LogDebug("Invoking sync method {MethodName} with return type {ReturnType}", invocation.MethodName, returnType.FullName);
         var result = _pool!.ExecuteAsync(invocation).GetAwaiter().GetResult();
-
+        _logger!.LogDebug("Received result for method {MethodName}", invocation.MethodName);
         if (!result.Success)
         {
             throw new RemoteInvocationException(
@@ -188,6 +187,7 @@ public class ProcessProxyDispatcher<TInterface> : DispatchProxy where TInterface
 
     private object InvokeAsyncMethod(MethodInvocationMessage invocation, Type returnType)
     {
+        _logger!.LogDebug("Invoking async method {MethodName} with return type {ReturnType}", invocation.MethodName, returnType.FullName);
         // Handle Task (no result)
         if (returnType == typeof(Task))
         {
@@ -223,6 +223,7 @@ public class ProcessProxyDispatcher<TInterface> : DispatchProxy where TInterface
 
     private async Task<T> InvokeAsyncGenericMethod<T>(MethodInvocationMessage invocation)
     {
+        _logger!.LogDebug("Invoking async generic method {MethodName} with return type {ReturnType}", invocation.MethodName, typeof(T).FullName);
         var result = await _pool!.ExecuteAsync(invocation);
 
         if (!result.Success)
@@ -232,7 +233,12 @@ public class ProcessProxyDispatcher<TInterface> : DispatchProxy where TInterface
                 result.ExceptionMessage ?? "Method failed",
                 result.StackTrace);
         }
+        _logger!.LogDebug("Deserializing result for method {MethodName}", invocation.MethodName);
 
-        return (T)SerializationHelper.DeserializeReturnValue(result.SerializedResult, typeof(T))!;
+        var returnResult = (T)SerializationHelper.DeserializeReturnValue(result.SerializedResult, typeof(T))!;
+
+        _logger!.LogDebug("Deserialized result for method {MethodName}, returnResult {ReturnResult}", invocation.MethodName, returnResult);
+
+        return returnResult;
     }
 }

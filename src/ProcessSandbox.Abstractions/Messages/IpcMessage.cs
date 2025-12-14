@@ -90,24 +90,6 @@ public class IpcMessage
     }
 
     /// <summary>
-    /// Creates a ping message.
-    /// </summary>
-    /// <returns>A new ping IPC message.</returns>
-    public static IpcMessage CreatePing()
-    {
-        return new IpcMessage(MessageType.Ping, []);
-    }
-
-    /// <summary>
-    /// Creates a pong message.
-    /// </summary>
-    /// <returns>A new pong IPC message.</returns>
-    public static IpcMessage CreatePong()
-    {
-        return new IpcMessage(MessageType.Pong, []);
-    }
-
-    /// <summary>
     /// Deserializes the payload as a method invocation message.
     /// </summary>
     /// <returns>The deserialized method invocation.</returns>
