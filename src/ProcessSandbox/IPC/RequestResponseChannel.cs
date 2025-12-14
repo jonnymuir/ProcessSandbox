@@ -133,7 +133,7 @@ public class RequestResponseChannel : IDisposable
             await Task.Delay(50).ConfigureAwait(false);
         }
         // Fail the active request immediately so the caller doesn't hang
-        FailPendingRequest(new IpcException("Channel is being closed by the host."));
+        //FailPendingRequest(new IpcException("Channel is being closed by the host."));
 
         _receiverCts.Cancel();
         await _channel.CloseAsync().ConfigureAwait(false);

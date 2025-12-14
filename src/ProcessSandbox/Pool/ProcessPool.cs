@@ -3,6 +3,8 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Net;
+using System.Reflection.Metadata;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -26,6 +28,8 @@ public class ProcessPool : IDisposable
     private readonly SemaphoreSlim _requestThrottle;
     private readonly SemaphoreSlim _startupThrottle;
     private bool _disposed;
+
+    const int maxAttempts = 10;
 
     /// <summary>
     /// Gets the current number of workers in the pool.
@@ -108,10 +112,12 @@ public class ProcessPool : IDisposable
     /// </summary>
     /// <param name="invocation">The method invocation details.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
+    /// <param name="attempt"></param>
     /// <returns>The method result.</returns>
     public async Task<MethodResultMessage> ExecuteAsync(
         MethodInvocationMessage invocation,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        int attempt = 0)
     {
         if (_disposed)
             throw new ObjectDisposedException(nameof(ProcessPool));
@@ -161,6 +167,26 @@ public class ProcessPool : IDisposable
             }
 
             return result;
+        }
+        catch (IpcException)
+        {
+            // Remove failed worker
+            if (worker != null)
+            {
+                await RemoveWorkerAsync(worker);
+            }
+
+            // Wait and try again
+            if(attempt >= maxAttempts)
+            {
+                _logger.LogError(
+                    "Max retry attempts reached for method {Method}",
+                    invocation.MethodName);
+                throw;
+            }
+            await Task.Delay(attempt*10).ConfigureAwait(false);
+            return await ExecuteAsync(invocation, cancellationToken);
+            
         }
         catch (Exception ex)
         {

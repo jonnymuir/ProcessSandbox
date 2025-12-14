@@ -86,7 +86,7 @@ public class NamedPipeClientChannel(string pipeName, string serverName = ".") : 
         {
             throw new ObjectDisposedException(nameof(NamedPipeClientChannel));
         }
-
+        
         if (!IsConnected)
         {
             throw new IpcException("Channel is not connected");
@@ -190,7 +190,7 @@ public class NamedPipeClientChannel(string pipeName, string serverName = ".") : 
 
             using var cts = new CancellationTokenSource(timeoutMs);
             testClient.Connect(timeoutMs);
-            
+
             return testClient.IsConnected;
         }
         catch
