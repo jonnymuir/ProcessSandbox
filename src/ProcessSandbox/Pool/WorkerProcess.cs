@@ -116,14 +116,14 @@ public class WorkerProcess(ProcessPoolConfiguration config, ILogger<WorkerProces
             string arguments;
             if (config.UseDotNetFrameworkWorker)
             {
-                fileName = Path.Combine(AppContext.BaseDirectory, "ProcessSandbox.Worker.Net48.exe");
+                fileName = Path.Combine(AppContext.BaseDirectory, "workers/net48/ProcessSandbox.Worker.exe");
                 arguments = $"--config {configBase64}";
             }
             else
             {
                 // Note: 'dotnet' must be available in the system's PATH
                 fileName = "dotnet";
-                arguments = $"{Path.Combine(AppContext.BaseDirectory, "ProcessSandbox.Worker.dll")} --config {configBase64}";
+                arguments = $"{Path.Combine(AppContext.BaseDirectory, "workers/net10.0/ProcessSandbox.Worker.dll")} --config {configBase64}";
             }
 
             // Start the process

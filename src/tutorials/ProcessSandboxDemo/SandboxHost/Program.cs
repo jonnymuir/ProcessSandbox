@@ -13,8 +13,8 @@ using var loggerFactory = LoggerFactory.Create(builder =>
 // 2. Configure the Pool
 var config = new ProcessPoolConfiguration
 {
-    MinPoolSize = 1,
-    MaxPoolSize = 1, // Keep it simple: 1 worker
+    MinPoolSize = 2,
+    MaxPoolSize = 2, // Keep it simple: 1 worker
     
     // The Critical Part: Point to our separate DLL
     // Note the replace of SandboxHost with LegacyLibrary in this instance just to get the right path
@@ -43,7 +43,7 @@ while (true)
     Console.Write($"\n[Call #{iteration}] Sending request... ");
     
     // This call happens in the worker process
-    proxy.LeakMemory(10); // Leak 10MB per call
+    //proxy.LeakMemory(10); // Leak 10MB per call
 
     var info = proxy.GetProcessInfo(); 
     Console.ForegroundColor = ConsoleColor.Green;

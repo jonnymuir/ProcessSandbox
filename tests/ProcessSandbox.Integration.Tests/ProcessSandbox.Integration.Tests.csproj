@@ -20,4 +20,23 @@
     <ProjectReference Include="..\..\src\ProcessSandbox\ProcessSandbox.csproj" />
     <ProjectReference Include="..\TestImplementations\TestImplementations.csproj" />
   </ItemGroup>
+
+  <Target Name="CopyWorkerToTestBin" AfterTargets="Build">
+    <PropertyGroup>
+      <WorkerSourceDir>
+        $(MSBuildThisFileDirectory)..\..\src\ProcessSandbox.Worker\bin\$(Configuration)\net10.0\</WorkerSourceDir>
+      <WorkerDestDir>$(TargetDir)workers\net10.0\</WorkerDestDir>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <WorkerFiles Include="$(WorkerSourceDir)**\*.*" />
+    </ItemGroup>
+
+    <Message Importance="High"
+      Text="Copying Worker assets from $(WorkerSourceDir) to $(WorkerDestDir)" />
+
+    <Copy SourceFiles="@(WorkerFiles)"
+      DestinationFolder="$(WorkerDestDir)%(RecursiveDir)"
+      SkipUnchangedFiles="true" />
+  </Target>
 </Project>

@@ -17,17 +17,4 @@
     <PackageReference Include="System.Reflection.DispatchProxy" Version="4.7.1" Condition="'$(TargetFramework)' == 'net48'" />
 
   </ItemGroup>
-
-  <!-- Embed worker executables as resources -->
-  <ItemGroup>
-    <None Include="..\ProcessSandbox.Worker\bin\$(Configuration)\net8.0\ProcessSandbox.Worker.exe" 
-          Pack="true" 
-          PackagePath="contentFiles\any\net8.0\workers" 
-          Condition="Exists('..\ProcessSandbox.Worker\bin\$(Configuration)\net8.0\ProcessSandbox.Worker.exe')" />
-    <None Include="..\ProcessSandbox.Worker.Net48\bin\$(Configuration)\net48\ProcessSandbox.Worker.Net48.exe" 
-          Pack="true" 
-          PackagePath="contentFiles\any\net48\workers" 
-          Condition="Exists('..\ProcessSandbox.Worker.Net48\bin\$(Configuration)\net48\ProcessSandbox.Worker.Net48.exe')" />
-  </ItemGroup>
-
 </Project>

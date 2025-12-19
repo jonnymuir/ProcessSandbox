@@ -13,6 +13,8 @@ if (args.Length == 0 || args[0] != "--config")
     return 1;
 }
 
+using var cts = new CancellationTokenSource();
+
 try
 {
     // Decode configuration
@@ -40,20 +42,35 @@ try
     using var workerHost = new WorkerHost(config, loggerFactory);
     
     // Monitor parent process
-    var parentMonitor = Task.Run(async () =>
+    _ = Task.Run(async () =>
     {
         try
         {
-            var parentProcess = System.Diagnostics.Process.GetProcessById(config.ParentProcessId);
-            await parentProcess.WaitForExitAsync();
-            logger.LogWarning("Parent process exited, shutting down worker");
-            await workerHost.StopAsync();
+            // Capture parent identity
+            using var parent = System.Diagnostics.Process.GetProcessById(config.ParentProcessId);
+            var parentStartTime = parent.StartTime;
+
+            while (!cts.Token.IsCancellationRequested)
+            {
+                parent.Refresh();
+                
+                // If parent exited OR PID was recycled (StartTime changed)
+                if (parent.HasExited || parent.StartTime != parentStartTime)
+                {
+                    logger.LogCritical("Parent process {Pid} lost. Emergency shutdown.", config.ParentProcessId);
+                    Environment.Exit(0); 
+                }
+
+                await Task.Delay(2000, cts.Token);
+            }
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error monitoring parent process");
+            // ArgumentException means PID is already gone
+            logger.LogCritical("Parent process monitoring failed: {Message}. Exiting.", ex.Message);
+            Environment.Exit(0);
         }
-    });
+    }, cts.Token);
 
     // Run the worker (blocks until shutdown)
     await workerHost.RunAsync();
@@ -76,4 +93,8 @@ catch (Exception ex)
     Console.Error.WriteLine($"Fatal error: {ex.Message}");
     Console.Error.WriteLine(ex.StackTrace);
     return 99;
+}
+finally
+{
+    cts.Cancel();
 }
