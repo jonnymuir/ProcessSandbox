@@ -43,7 +43,7 @@ while (true)
     Console.Write($"\n[Call #{iteration}] Sending request... ");
     
     // This call happens in the worker process
-    //proxy.LeakMemory(10); // Leak 10MB per call
+    proxy.LeakMemory(10); // Leak 10MB per call
 
     var info = proxy.GetProcessInfo(); 
     Console.ForegroundColor = ConsoleColor.Green;
