@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using ProcessSandbox.Abstractions;
 using ProcessSandbox.Abstractions.Messages;
-using ProcessSandbox.IPC;
+using ProcessSandBox.Abstractions.IPC;
 using System.Runtime.InteropServices;
 
 namespace ProcessSandbox.Pool;

@@ -2,7 +2,7 @@ using System;
 using System.Security.Cryptography;
 using System.Text;
 
-namespace ProcessSandbox.IPC;
+namespace ProcessSandBox.Abstractions.IPC;
 
 /// <summary>
 /// Generates unique names for named pipes.

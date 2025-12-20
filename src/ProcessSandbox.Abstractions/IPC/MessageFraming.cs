@@ -5,7 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using ProcessSandbox.Abstractions;
 
-namespace ProcessSandbox.IPC;
+namespace ProcessSandBox.Abstractions.IPC;
 
 /// <summary>
 /// Provides length-prefixed message framing for stream-based communication.

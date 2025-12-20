@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging;
 using ProcessSandbox.Abstractions;
 using ProcessSandbox.Abstractions.Messages;
 
-namespace ProcessSandbox.IPC;
+namespace ProcessSandBox.Abstractions.IPC;
 
 /// <summary>
 /// Wraps an IPC channel with a simplified single-request-response pattern.

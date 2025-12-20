@@ -4,7 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
 using MessagePack;
-using ProcessSandbox.IPC;
+using ProcessSandBox.Abstractions.IPC;
 using ProcessSandbox.Abstractions.Messages;
 
 namespace ProcessSandbox.Tests.IPC;

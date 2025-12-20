@@ -3,7 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using ProcessSandbox.Abstractions.Messages;
 
-namespace ProcessSandbox.IPC;
+namespace ProcessSandBox.Abstractions.IPC;
 
 /// <summary>
 /// Represents a bidirectional communication channel for IPC.

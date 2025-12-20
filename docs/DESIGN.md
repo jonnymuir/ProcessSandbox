@@ -19,7 +19,7 @@ ProcessSandbox is a .NET library that provides process isolation for legacy, unm
 - `IpcChannel`: Handles named pipe communication
 
 #### 2. ProcessSandbox.Worker (Generic Host)
-**Target Frameworks:** .NET 8.0, .NET Framework 4.8 (separate exes)
+**Target Frameworks:** .NET 8.0, .NET Framework 4.8 (separate exes) + .Net Framework 4.8 32 bit
 
 Generic executable that:
 - Loads specified assembly and type at runtime

@@ -21,9 +21,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\ProcessSandbox.Abstractions\ProcessSandbox.Abstractions.csproj" />
     <ProjectReference Include="..\..\src\ProcessSandbox\ProcessSandbox.csproj" />
-    <ProjectReference Include="..\..\src\ProcessSandbox.Worker\ProcessSandbox.Worker.csproj" />
     <ProjectReference Include="..\TestImplementations\TestImplementations.csproj" />
  
   </ItemGroup>

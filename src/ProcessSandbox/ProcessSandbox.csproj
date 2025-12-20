@@ -2,19 +2,27 @@
 
   <PropertyGroup>
     <TargetFrameworks>net8.0;net10.0;net48</TargetFrameworks>
-    <Description>Process isolation library for .NET that protects your application from legacy, unmanaged, or problematic code by running it in separate sandboxed processes.</Description>
+    <Description>Process isolation library for .NET that protects your application from legacy,
+      unmanaged, or problematic code by running it in separate sandboxed processes.</Description>
     <PackageId>ProcessSandbox.Runner</PackageId>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\ProcessSandbox.Abstractions\ProcessSandbox.Abstractions.csproj" />
+    <ProjectReference Include="..\ProcessSandbox.Worker\ProcessSandbox.Worker.csproj">
+      <PrivateAssets>none</PrivateAssets>
+      <IncludeAssets>all</IncludeAssets>
+    </ProjectReference>
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="MessagePack" Version="$(MessagePackVersion)" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="$(MicrosoftExtensionsLoggingVersion)" />
-    <PackageReference Include="System.IO.Pipes" Version="4.3.0" Condition="'$(TargetFramework)' == 'net48'" />
-    <PackageReference Include="System.Reflection.DispatchProxy" Version="4.7.1" Condition="'$(TargetFramework)' == 'net48'" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions"
+      Version="$(MicrosoftExtensionsLoggingVersion)" />
+    <PackageReference Include="System.IO.Pipes" Version="4.3.0"
+      Condition="'$(TargetFramework)' == 'net48'" />
+    <PackageReference Include="System.Reflection.DispatchProxy" Version="4.7.1"
+      Condition="'$(TargetFramework)' == 'net48'" />
 
   </ItemGroup>
 </Project>

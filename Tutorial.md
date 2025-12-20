@@ -38,10 +38,8 @@ dotnet sln add Contracts/Contracts.csproj
 dotnet add SandboxHost/SandboxHost.csproj reference Contracts/Contracts.csproj
 dotnet add LegacyLibrary/LegacyLibrary.csproj reference Contracts/Contracts.csproj
 
-# 8. Install ProcessSandbox.Runner and Worker into the Host
+# 8. Install ProcessSandbox.Runner
 dotnet add SandboxHost/SandboxHost.csproj package ProcessSandbox.Runner --prerelease
-dotnet add SandboxHost/SandboxHost.csproj package ProcessSandbox.Worker --prerelease
-
 
 # 9. Add Logging package
 dotnet add SandboxHost/SandboxHost.csproj package Microsoft.Extensions.Logging.Console

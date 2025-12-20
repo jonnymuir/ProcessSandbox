@@ -10,12 +10,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ProcessSandbox.Abstractions\ProcessSandbox.Abstractions.csproj" />
-    <ProjectReference Include="..\ProcessSandbox\ProcessSandbox.csproj" />
   </ItemGroup>
   
   <ItemGroup>
-    <PackageReference Include="MessagePack" Version="3.1.4" /> 
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.0" />
+    <PackageReference Include="MessagePack" Version="$(MessagePackVersion)" /> 
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="$(MicrosoftExtensionsLoggingVersion)" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="$(MicrosoftExtensionsLoggingVersion)" />
   </ItemGroup>
 </Project>
