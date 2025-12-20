@@ -156,13 +156,6 @@ dotnet build
 dotnet test
 ```
 
-## Examples
-
-See the [samples](./samples) directory:
-- [COM Interop Example](./samples/ComInterop.Sample) - 32-bit COM object usage
-- [Native DLL Example](./samples/NativeDll.Sample) - Unmanaged DLL calls
-- [Resource Leak Example](./samples/ResourceLeak.Sample) - Handling leaky code
-
 ## Documentation
 
 - [Design Document](./docs/DESIGN.md)
@@ -188,7 +181,6 @@ MIT License - see [LICENSE](./LICENSE) for details.
 
 ## Roadmap
 
-- [ ] Linux/macOS support
 - [ ] Circuit breaker pattern
 - [ ] Dynamic pool scaling
 - [ ] Telemetry/metrics export
