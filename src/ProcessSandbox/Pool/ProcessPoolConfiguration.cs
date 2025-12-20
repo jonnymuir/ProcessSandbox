@@ -95,12 +95,12 @@ public class ProcessPoolConfiguration
     /// <summary>
     /// Gets or sets the timeout for method invocations.
     /// </summary>
-    public TimeSpan MethodCallTimeout { get; set; } = TimeSpan.FromSeconds(120);
+    public TimeSpan MethodCallTimeout { get; set; } = TimeSpan.FromSeconds(300);
 
     /// <summary>
     /// Gets or sets the timeout for starting a worker process.
     /// </summary>
-    public TimeSpan ProcessStartTimeout { get; set; } = TimeSpan.FromSeconds(10);
+    public TimeSpan ProcessStartTimeout { get; set; } = TimeSpan.FromSeconds(60);
 
     /// <summary>
     /// Gets or sets whether to enable verbose logging in worker processes.
