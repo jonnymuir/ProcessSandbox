@@ -55,8 +55,6 @@ public class LeakyTests : IDisposable
             MaxMemoryMB = 512,
             MaxGdiHandles = 5000,
             ProcessRecycleThreshold = 0,
-            MethodCallTimeout = TimeSpan.FromSeconds(15),
-            ProcessStartTimeout = TimeSpan.FromSeconds(15),
             VerboseWorkerLogging = false,
             RecycleAfterCalls = 10
 
@@ -95,8 +93,6 @@ public class LeakyTests : IDisposable
             MaxMemoryMB = 512,
             MaxGdiHandles = 5000,
             ProcessRecycleThreshold = 0,
-            MethodCallTimeout = TimeSpan.FromSeconds(15),
-            ProcessStartTimeout = TimeSpan.FromSeconds(15),
             VerboseWorkerLogging = false,
             RecycleAfterCalls = 10
 

@@ -49,9 +49,7 @@ public class ProcessPoolStatisticsTests
             MinPoolSize = 2,
             MaxPoolSize = 3,
             ImplementationAssemblyPath = _testAssemblyPath,
-            ImplementationTypeName = typeof(TestServiceImpl).FullName!,
-            MethodCallTimeout = TimeSpan.FromSeconds(15),
-            ProcessStartTimeout = TimeSpan.FromSeconds(15),
+            ImplementationTypeName = typeof(TestServiceImpl).FullName!
         };
 
         var pool = new ProcessPool(config, _loggerFactory);

@@ -184,8 +184,6 @@ public class EndToEndTests : IDisposable
             MaxMemoryMB = 512,
             MaxGdiHandles = 5000,
             ProcessRecycleThreshold = 100,
-            MethodCallTimeout = TimeSpan.FromSeconds(15),
-            ProcessStartTimeout = TimeSpan.FromSeconds(15),
             VerboseWorkerLogging = false
         };
     }

@@ -42,9 +42,7 @@ public class WorkerRecyclingTests
             MaxPoolSize = 1,
             ImplementationAssemblyPath = _testAssemblyPath,
             ImplementationTypeName = typeof(TestServiceImpl).FullName!,
-            ProcessRecycleThreshold = 5, // Recycle after 5 calls
-            MethodCallTimeout = TimeSpan.FromSeconds(10),
-            ProcessStartTimeout = TimeSpan.FromSeconds(10),
+            ProcessRecycleThreshold = 5
         };
 
         var proxy = await ProcessProxy.CreateAsync<ITestService>(config, _loggerFactory);
@@ -74,8 +72,6 @@ public class WorkerRecyclingTests
             ImplementationAssemblyPath = _testAssemblyPath,
             ImplementationTypeName = typeof(StatefulServiceImpl).FullName!,
             ProcessRecycleThreshold = 3,
-            MethodCallTimeout = TimeSpan.FromSeconds(10),
-            ProcessStartTimeout = TimeSpan.FromSeconds(10),
             RecycleAfterCalls = 1
         };
 
