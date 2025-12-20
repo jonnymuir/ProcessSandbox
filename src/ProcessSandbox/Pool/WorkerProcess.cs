@@ -114,12 +114,24 @@ public class WorkerProcess(ProcessPoolConfiguration config, ILogger<WorkerProces
 
             string fileName;
             string arguments;
-            if (config.UseDotNetFrameworkWorker)
+            if (config.DotNetVersion == DotNetVersion.Net48)
             {
                 fileName = Path.Combine(AppContext.BaseDirectory, "workers/net48/ProcessSandbox.Worker.exe");
                 arguments = $"--config {configBase64}";
             }
-            else
+            else if(config.DotNetVersion == DotNetVersion.Net48_32Bit)
+            {
+                 fileName = Path.Combine(AppContext.BaseDirectory, "workers/net48/win-x86/ProcessSandbox.Worker.exe");
+                arguments = $"--config {configBase64}";
+               
+            }
+            else if(config.DotNetVersion == DotNetVersion.Net8_0)
+            {
+                // .NET 8.0
+                fileName = "dotnet";
+                arguments = $"{Path.Combine(AppContext.BaseDirectory, "workers/net8.0/ProcessSandbox.Worker.dll")} --config {configBase64}";
+            }
+            else // DotNetVersion.Net10_0
             {
                 // Note: 'dotnet' must be available in the system's PATH
                 fileName = "dotnet";

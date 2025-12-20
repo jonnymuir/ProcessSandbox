@@ -40,6 +40,9 @@ jobs:
     
     - name: Build
       run: dotnet build --configuration Release --no-restore
+
+    - name: Build 32-bit
+      run: dotnet build src/ProcessSandbox.Worker/ProcessSandbox.Worker.csproj -c Release -f net48 -r win-x86 --no-restore
     
     - name: Test
       if: github.event_name != 'workflow_dispatch' || (github.event.inputs.action_mode == 'full-build')

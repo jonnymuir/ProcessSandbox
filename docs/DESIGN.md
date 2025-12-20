@@ -182,7 +182,7 @@ AssignProcessToJobObject(job, workerProcess.Handle);
 ### 2. 32-bit Worker Support
 Configuration allows specifying worker architecture:
 ```csharp
-config.UseDotNetFrameworkWorker = true; // For COM interop
+config.DotNetVersion = DotNetVersion.Net48_32Bit; // For COM interop
 ```
 
 ### 3. Resource Limits
@@ -201,8 +201,8 @@ public class ProcessPoolConfiguration
     
     // Worker executable
     public string WorkerExecutable { get; set; }
-    public bool UseDotNetFrameworkWorker { get; set; } = false;
-    
+    public DotNetVersion DotNetVersion { get; set; } = DotNetVersion.Net10_0;
+
     // Assembly loading
     public string WorkerAssembly { get; set; }
     public string WorkerType { get; set; }

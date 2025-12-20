@@ -3,6 +3,29 @@ using System;
 namespace ProcessSandbox.Pool;
 
 /// <summary>
+/// Framework versions for the worker process.
+/// </summary>
+public enum DotNetVersion
+{
+    /// <summary>
+    /// .NET 8.0
+    /// </summary>
+    Net8_0,
+    /// <summary>
+    /// .NET 10.0
+    /// </summary>
+    Net10_0,
+    /// <summary>
+    /// .NET Framework 4.8
+    /// </summary>
+    Net48,
+    /// <summary>
+    /// .NET Framework 4.8 32-bit
+    /// </summary>
+    Net48_32Bit
+}   
+
+/// <summary>
 /// Configuration options for the process pool.
 /// </summary>
 public class ProcessPoolConfiguration
@@ -24,10 +47,9 @@ public class ProcessPoolConfiguration
     public string? WorkerExecutablePath { get; set; }
 
     /// <summary>
-    /// Gets or sets whether to use a 32-bit worker process.
-    /// Useful for COM interop scenarios.
+    /// Gets or sets the DotNetVersion
     /// </summary>
-    public bool UseDotNetFrameworkWorker { get; set; } = false;
+    public DotNetVersion DotNetVersion { get; set; } = DotNetVersion.Net10_0;
 
     /// <summary>
     /// Gets or sets the path to the assembly containing the implementation.
@@ -147,7 +169,7 @@ public class ProcessPoolConfiguration
             MinPoolSize = MinPoolSize,
             MaxPoolSize = MaxPoolSize,
             WorkerExecutablePath = WorkerExecutablePath,
-            UseDotNetFrameworkWorker = UseDotNetFrameworkWorker,
+            DotNetVersion = DotNetVersion,
             ImplementationAssemblyPath = ImplementationAssemblyPath,
             ImplementationTypeName = ImplementationTypeName,
             MaxMemoryMB = MaxMemoryMB,
