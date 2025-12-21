@@ -30,7 +30,9 @@ You have legacy code that:
 
 ## Quick Start
 
-See the [tutorial](Tutorial.md) for an easy to follow example of how ProcessSandbox.Runner works
+See the [tutorial](Tutorial.md) for an easy to follow example of how ProcessSandbox.Runner works.
+
+See the [com tutorial(TutorialCom.md)] to see an example of how to call a 32 bit com object in an Azure App Service.
 
 ### Installation
 
@@ -159,9 +161,6 @@ dotnet test
 ## Documentation
 
 - [Design Document](./docs/DESIGN.md)
-- [Configuration Guide](./docs/CONFIGURATION.md)
-- [Troubleshooting](./docs/TROUBLESHOOTING.md)
-- [API Reference](./docs/API.md)
 
 ## Performance
 
@@ -191,3 +190,50 @@ MIT License - see [LICENSE](./LICENSE) for details.
 - 🐛 [Report issues](https://github.com/jonnymuir/ProcessSandbox/issues)
 - 💬 [Discussions](https://github.com/jonnymuir/ProcessSandbox/discussions)
 - 📧 Email: jonnypmuir@gmail.com
+
+## Useful tips when building
+
+If I'm having to make changes to ProcessSandbox and write an end to end solution which uses it from packages, I find it easier to test from a local nuget server rather than having to wait for nuget to publish new versions.
+
+To do this set up a local nuget server e.g.
+
+```bash
+dotnet nuget add source ~/LocalNuGetFeed --name LocalTestFeed --at-position 1
+```
+
+Then to build all the packages and put them in the local feed you can do the following (from the root of ProcessSanbox - e.g. where the ProcessSandbox.sln is)
+```bash
+dotnet build --configuration Release
+dotnet build src/ProcessSandbox.Worker/ProcessSandbox.Worker.csproj -c Release -f net48 -r win-x86
+dotnet pack /p:ExcludeProjects="**/ProcessSandbox.Worker.csproj" --configuration Release --no-build --output push-ready-artifacts
+dotnet pack src/ProcessSandbox.Worker/ProcessSandbox.Worker.nuspec --configuration Release --output push-ready-artifacts
+cp push-ready-artifacts/* ~/LocalNuGetFeed
+```
+
+Remember to clear the local cache when you want to use them
+
+```bash
+dotnet nuget locals all --clear
+```
+
+And remember to get rid of from the local package source if you really want to pick them up from nuget.
+
+```bash
+rm ~/LocalNuGetFeed/*
+```
+
+### Deploying the com tutorials to azure
+
+Replace jonnymoo_rg_9172 with the name of your resource group and com-sandbox-demo-app with the name of you web app (from src/tutorials/ComSandboxDemo)
+
+```bash
+dotnet clean
+rm -rf publish
+rm site.zip
+dotnet nuget locals all --clear
+dotnet publish AzureSandboxHost/AzureSandboxHost.csproj -c Release -o ./publish
+cd publish
+zip -r ../site.zip *
+cd ..
+az webapp deployment source config-zip --resource-group jonnymoo_rg_9172 --name com-sandbox-demo-app --src site.zip
+```

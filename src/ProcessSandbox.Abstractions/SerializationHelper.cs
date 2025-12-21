@@ -108,7 +108,7 @@ public static class SerializationHelper
             var type = Type.GetType(typeName);
             if (type == null)
                 throw new TypeLoadException($"Could not load type: {typeName}");
-            
+
             types.Add(type);
         }
 
@@ -125,7 +125,16 @@ public static class SerializationHelper
         if (type == null)
             throw new ArgumentNullException(nameof(type));
 
-        return type.AssemblyQualifiedName ?? type.FullName ?? type.Name;
+        // If it's a primitive/system type, just send the FullName (e.g., "System.Int32")
+        // instead of the AssemblyQualifiedName which includes "Version=10.0.0.0"
+        if (type.Assembly.FullName.Contains("System.Private.CoreLib") || type.Assembly.FullName.Contains("mscorlib"))
+        {
+            return type.FullName;
+        }
+        else
+        {
+            return type.AssemblyQualifiedName ?? type.FullName ?? type.Name;
+        }
     }
 
     /// <summary>

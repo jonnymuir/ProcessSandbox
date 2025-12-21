@@ -175,7 +175,7 @@ public class ProcessProxyDispatcher<TInterface> : DispatchProxy where TInterface
         {
             throw new RemoteInvocationException(
                 result.ExceptionType ?? "Unknown",
-                result.ExceptionMessage ?? "Method failed",
+                (result.ExceptionMessage ?? "Method failed")+", Remote Stack Trace: "+(result.StackTrace ?? "No stack trace"),
                 result.StackTrace);
         }
 
@@ -216,7 +216,7 @@ public class ProcessProxyDispatcher<TInterface> : DispatchProxy where TInterface
         {
             throw new RemoteInvocationException(
                 result.ExceptionType ?? "Unknown",
-                result.ExceptionMessage ?? "Method failed",
+                (result.ExceptionMessage ?? "Method failed")+", Remote Stack Trace: "+(result.StackTrace ?? "No stack trace"),
                 result.StackTrace);
         }
     }
@@ -230,7 +230,7 @@ public class ProcessProxyDispatcher<TInterface> : DispatchProxy where TInterface
         {
             throw new RemoteInvocationException(
                 result.ExceptionType ?? "Unknown",
-                result.ExceptionMessage ?? "Method failed",
+                (result.ExceptionMessage ?? "Method failed")+", Remote Stack Trace: "+(result.StackTrace ?? "No stack trace"),
                 result.StackTrace);
         }
         _logger!.LogDebug("Deserializing result for method {MethodName}", invocation.MethodName);

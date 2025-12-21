@@ -15,12 +15,11 @@ cd ComSandboxDemo
 dotnet new sln
 
 # 3. Create the "Host" app (The Azure Web API)
-# We target net10.0 (Ensure you have the preview SDK installed, or swap to net9.0 if not)
 dotnet new webapi -n AzureSandboxHost -f net10.0
 
 # 4. Create the "Legacy Library" 
-# This compiles fine on Mac, it just won't run locally.
-dotnet new classlib -n LegacyLibrary -f net48
+# We create it as standard 2.0 first to satisfy the Mac CLI
+dotnet new classlib -n LegacyLibrary -f netstandard2.0
 
 # 5. Create the Contracts (Shared Interface)
 dotnet new classlib -n Contracts -f netstandard2.0
@@ -39,6 +38,27 @@ dotnet add AzureSandboxHost/AzureSandboxHost.csproj reference LegacyLibrary/Lega
 dotnet add AzureSandboxHost/AzureSandboxHost.csproj package ProcessSandbox.Runner --prerelease
 dotnet add Contracts/Contracts.csproj package ProcessSandbox.Abstractions --prerelease
 
+```
+
+### Manually change Legacy Library to net48
+
+Open `LegacyLibrary/LegacyLibrary.csproj` in VS Code.
+
+Change `<TargetFramework>netstandard2.0</TargetFramework>` to `<TargetFramework>net48</TargetFramework>`.
+
+It should look like this:
+
+```xml
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework> 
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Contracts\Contracts.csproj" />
+  </ItemGroup>
+</Project>
 ```
 
 ## Phase 2: The "Hidden" Manifest Strategy
@@ -69,15 +89,20 @@ For Registration-Free COM to work, our manifest **must** sit right next to that 
 
   <Target Name="CopyManifestToWorkerFolder" AfterTargets="Build;Publish">
     <PropertyGroup>
-      <WorkerPath>$(OutputPath)/workers/net48/win-x86</WorkerPath> 
+      <ActualDestination Condition="'$(PublishDir)' != ''">$(PublishDir)</ActualDestination>
+      <ActualDestination Condition="'$(PublishDir)' == ''">$(OutputPath)</ActualDestination>
+
+      <WorkerPath>$(ActualDestination)workers/net48/win-x86</WorkerPath>
       <ManifestName>ProcessSandbox.Worker.exe.manifest</ManifestName>
     </PropertyGroup>
 
-    <Message Text="Deploying COM Manifest to $(WorkerPath)..." Importance="high" />
-    
-    <Copy SourceFiles="LegacyLibrary.X.manifest" 
-          DestinationFiles="$(WorkerPath)/$(ManifestName)" 
-          OverwriteReadOnlyFiles="true" />
+    <Message Text="Deploying COM Manifest to: $(WorkerPath)" Importance="high" />
+
+    <MakeDir Directories="$(WorkerPath)" />
+
+    <Copy SourceFiles="LegacyLibrary.X.manifest"
+      DestinationFiles="$(WorkerPath)/$(ManifestName)"
+      OverwriteReadOnlyFiles="true" />
   </Target>
 
 ```
@@ -89,9 +114,22 @@ For Registration-Free COM to work, our manifest **must** sit right next to that 
 ```csharp
 namespace Contracts;
 
+/// <summary>
+/// A simple calculator interface
+/// </summary>
 public interface ICalculator
 {
+    /// <summary>
+    /// Adds two integers
+    /// </summary>
+    /// <param name="a"></param>
+    /// <param name="b"></param>
+    /// <returns></returns>
     int Add(int a, int b);
+    /// <summary>
+    /// Gets system information
+    /// </summary>
+    /// <returns></returns>
     string GetSystemInfo();
 }
 
@@ -106,25 +144,45 @@ using Contracts;
 
 namespace LegacyLibrary;
 
-// The COM Object
+/// <summary>
+/// The COM-visible Calculator class
+/// </summary>
 [ComVisible(true)]
 [Guid("11111111-2222-3333-4444-555555555555")]
 [ProgId("Legacy.Calculator")]
-public class AncientCalculator
+public class Calculator
 {
+    /// <summary>
+    /// Adds two integers
+    /// </summary>
+    /// <param name="a"></param>
+    /// <param name="b"></param>
+    /// <returns></returns>
     public int Add(int a, int b) => a + b;
 }
 
-// The Adapter
+/// <summary>
+/// A legacy service that uses the COM Calculator internally
+/// </summary>
 public class LegacyService : ICalculator
 {
+    /// <summary>
+    /// Adds two integers using the COM Calculator
+    /// </summary>
+    /// <param name="a"></param>
+    /// <param name="b"></param>
+    /// <returns></returns>
     public int Add(int a, int b)
     {
         // Simple instantiation inside the 32-bit process
-        var com = new AncientCalculator();
+        var com = new Calculator();
         return com.Add(a, b);
     }
 
+    /// <summary>
+    /// Gets system information
+    /// </summary>
+    /// <returns></returns>
     public string GetSystemInfo()
     {
         return $"OS: {Environment.OSVersion} | 64Bit: {Environment.Is64BitProcess} | Ver: {Environment.Version}";
@@ -206,10 +264,48 @@ az webapp up --sku F1 --name my-unique-sandbox-app --os-type Windows --location 
 
 ```
 
-
 *(Replace `my-unique-sandbox-app` with a unique name).*
+
 3. **Wait for Deployment:**
 Azure will bundle your code, upload it, build it remotely (or use your local build), and start the site.
+
+If this fails you may need publish and zip up the site manually and add it. Grab hold of the resource group name the previous step created
+
+Clean and publish locally
+
+```bash
+# 1. Clean old artifacts
+dotnet clean
+
+# 2. Publish the Host (this also triggers the MSBuild script for the manifest)
+dotnet publish AzureSandboxHost/AzureSandboxHost.csproj -c Release -o ./publish
+```
+
+Zip the output - you need to zip the contents of the publish folder, not the folder itself
+
+```bash
+cd publish
+zip -r ../site.zip *
+cd ..
+```
+
+Push to Azure
+
+```bash
+az webapp deployment source config-zip \
+    --resource-group replace_with_resource_group_name \
+    --name my-unique-sandbox-app \
+    --src site.zip
+```
+
+Ensure the App Service itself allows 32-bit processes
+
+```bash
+az webapp config set \
+    --resource-group replace_with_resource_group_name \
+    --name my-unique-sandbox-app \
+    --use-32bit-worker-process true
+```
 
 ## What you will see
 

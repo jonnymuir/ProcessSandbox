@@ -23,6 +23,8 @@ bld/
 [Oo]bj/
 [Ll]og/
 [Ll]ogs/
+[Pp]ublish/
+site.zip
 
 # Visual Studio cache/options
 .vs/
