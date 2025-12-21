@@ -1,206 +1,183 @@
-# Tutorial - Calling a com object
+# Running a 32 bit Com Object
 
-In this guide, we will create a **32-bit COM Object** and a **Web API Host**. We will deploy this to Azure App Service (Free Tier) using **Registration-Free COM** (Side-by-Side) to bypass the need for Docker or Windows Registry access.
+In this guide, we will write a modern **.NET 10 Web API**. I am coding on a Mac. This API will control a legacy **32-bit COM Object**. Since we cannot run 32-bit COM on macOS, we will deploy to **Azure App Service (Free Tier)** to watch it work.
 
-## Phase 1: Project Setup
+## Phase 1: Project Setup (VS Code Terminal)
 
-We need a specific structure: a 32-bit COM library, a Wrapper (the Worker), and the Web API Host.
-
-Run these commands in your VS Code terminal:
+We will set up the structure. Note that we can *build* .NET Framework 4.8 libraries on a Mac using the .NET SDK, even if we can't run them.
 
 ```bash
-# 1. Create folder structure
+# 1. Create the folder structure
 mkdir ComSandboxDemo
 cd ComSandboxDemo
+
+# 2. Create the solution
 dotnet new sln
 
-# 2. Create the "Legacy" COM Object (The 32-bit Code)
-dotnet new classlib -n LegacyComServer -f net8.0
+# 3. Create the "Host" app (The Azure Web API)
+# We target net10.0 (Ensure you have the preview SDK installed, or swap to net9.0 if not)
+dotnet new webapi -n AzureSandboxHost -f net10.0
 
-# 3. Create the Contracts (Shared Interfaces)
+# 4. Create the "Legacy Library" 
+# This compiles fine on Mac, it just won't run locally.
+dotnet new classlib -n LegacyLibrary -f net48
+
+# 5. Create the Contracts (Shared Interface)
 dotnet new classlib -n Contracts -f netstandard2.0
 
-# 4. Create the Web API Host (The Azure App)
-dotnet new webapi -n AzureSandboxHost
-
-# 5. Link projects
-dotnet sln add LegacyComServer/LegacyComServer.csproj
-dotnet sln add Contracts/Contracts.csproj
+# 6. Link projects to solution
 dotnet sln add AzureSandboxHost/AzureSandboxHost.csproj
+dotnet sln add LegacyLibrary/LegacyLibrary.csproj
+dotnet sln add Contracts/Contracts.csproj
 
-# 6. References
+# 7. Add References
 dotnet add AzureSandboxHost/AzureSandboxHost.csproj reference Contracts/Contracts.csproj
-dotnet add AzureSandboxHost/AzureSandboxHost.csproj package ProcessSandbox.Runner --prerelease
+dotnet add LegacyLibrary/LegacyLibrary.csproj reference Contracts/Contracts.csproj
+dotnet add AzureSandboxHost/AzureSandboxHost.csproj reference LegacyLibrary/LegacyLibrary.csproj
 
+# 8. Install ProcessSandbox packages
+dotnet add AzureSandboxHost/AzureSandboxHost.csproj package ProcessSandbox.Runner --prerelease
 dotnet add Contracts/Contracts.csproj package ProcessSandbox.Abstractions --prerelease
 
-# 7. IMPORTANT: We need the ComServer to be referenceable for build, 
-# but at runtime, we will load it via COM, not .NET references.
-dotnet add AzureSandboxHost/AzureSandboxHost.csproj reference LegacyComServer/LegacyComServer.csproj
-
 ```
 
-### Phase 2: Create the 32-bit COM Object
+## Phase 2: The "Hidden" Manifest Strategy
 
-We need to force this project to be **x86** and expose it as a COM object.
+The `ProcessSandbox` package unpacks its worker executable into a deep folder: `workers/net48/win-x86/ProcessSandbox.Worker.exe`.
 
-1. Open `LegacyComServer/LegacyComServer.csproj`.
-2. Add `<EnableComHosting>true</EnableComHosting>` and `<PlatformTarget>x86</PlatformTarget>`.
+For Registration-Free COM to work, our manifest **must** sit right next to that executable. We will use an MSBuild script to automate this copy.
 
-It should look like this:
-
-```xml
-<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-    <PlatformTarget>x86</PlatformTarget>
-    <EnableComHosting>true</EnableComHosting>
-    <GenerateRuntimeConfigurationFiles>true</GenerateRuntimeConfigurationFiles>
-    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
-  </PropertyGroup>
-</Project>
-
-```
-
-3. Create `LegacyComServer/Calculator.cs`. We will use a fixed GUID so we can find it later.
-
-```csharp
-using System.Runtime.InteropServices;
-
-namespace LegacyComServer;
-
-[ComVisible(true)]
-[Guid("11111111-2222-3333-4444-555555555555")] // The "Registry" Key
-[ProgId("Legacy.Calculator")]
-public class Calculator
-{
-    public int Add(int a, int b)
-    {
-        // Prove we are in 32-bit mode
-        if (IntPtr.Size != 4) throw new Exception("I am not running in 32-bit!");
-        return a + b;
-    }
-}
-
-```
-
-### Phase 3: The "Magic" Manifest
-
-Since we cannot run `regsvr32` on Azure App Service, we must use a **Manifest** to tell Windows where to find our COM object.
-
-Create a new file `AzureSandboxHost/LegacyComServer.X.manifest` (Note: Put this in the Host project so it copies to output).
+1. Create `AzureSandboxHost/LegacyLibrary.X.manifest`:
 
 ```xml
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
-  <assemblyIdentity name="LegacyComServer.X" version="1.0.0.0" type="win32"/>
-  <file name="LegacyComServer.comhost.dll">
+  <assemblyIdentity name="LegacyLibrary.X" version="1.0.0.0" type="win32"/>
+  <file name="LegacyLibrary.dll">
     <comClass clsid="{11111111-2222-3333-4444-555555555555}" threadingModel="Both" progid="Legacy.Calculator" />
   </file>
 </assembly>
 
 ```
 
-*Tip: In VS Code, ensure this file is copied to the build output. Open `AzureSandboxHost.csproj` and add:*
+2. **The Critical Step:** Open `AzureSandboxHost/AzureSandboxHost.csproj` and add this logic at the end (before `</Project>`). This ensures the manifest lands in the right spot during Build and Publish.
 
 ```xml
-<ItemGroup>
-  <None Update="LegacyComServer.X.manifest">
-    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-  </None>
-</ItemGroup>
+  <ItemGroup>
+    <None Include="LegacyLibrary.X.manifest" />
+  </ItemGroup>
+
+  <Target Name="CopyManifestToWorkerFolder" AfterTargets="Build;Publish">
+    <PropertyGroup>
+      <WorkerPath>$(OutputPath)/workers/net48/win-x86</WorkerPath> 
+      <ManifestName>ProcessSandbox.Worker.exe.manifest</ManifestName>
+    </PropertyGroup>
+
+    <Message Text="Deploying COM Manifest to $(WorkerPath)..." Importance="high" />
+    
+    <Copy SourceFiles="LegacyLibrary.X.manifest" 
+          DestinationFiles="$(WorkerPath)/$(ManifestName)" 
+          OverwriteReadOnlyFiles="true" />
+  </Target>
 
 ```
 
-### Phase 4: The Adapter (Worker Code)
+## Phase 3: The Code (Contracts & Legacy)
 
-We need a class that `ProcessSandbox` will load. This class will perform the COM Activation.
-
-Create `LegacyComServer/ComAdapter.cs` (Keeping it in the same project for simplicity, though usually, this would be separate):
+**1. Contracts (`Contracts/ICalculator.cs`):**
 
 ```csharp
-using System.Reflection;
-using System.Runtime.InteropServices;
-using ProcessSandbox.Abstractions;
+namespace Contracts;
 
-namespace LegacyComServer;
-
-// This is the class ProcessSandbox talks to
-public class ComAdapter
+public interface ICalculator
 {
-    public int AddNumbers(int a, int b)
+    int Add(int a, int b);
+    string GetSystemInfo();
+}
+
+```
+
+**2. Legacy Library (`LegacyLibrary/LegacyService.cs`):**
+
+```csharp
+using System;
+using System.Runtime.InteropServices;
+using Contracts;
+
+namespace LegacyLibrary;
+
+// The COM Object
+[ComVisible(true)]
+[Guid("11111111-2222-3333-4444-555555555555")]
+[ProgId("Legacy.Calculator")]
+public class AncientCalculator
+{
+    public int Add(int a, int b) => a + b;
+}
+
+// The Adapter
+public class LegacyService : ICalculator
+{
+    public int Add(int a, int b)
     {
-        // 1. Activate COM object using the GUID we defined
-        // Because of the manifest, Windows finds it without Registry lookup!
-        var type = Type.GetTypeFromCLSID(Guid.Parse("11111111-2222-3333-4444-555555555555"));
-        
-        if (type == null) throw new Exception("COM Class not found in manifest!");
+        // Simple instantiation inside the 32-bit process
+        var com = new AncientCalculator();
+        return com.Add(a, b);
+    }
 
-        dynamic calculator = Activator.CreateInstance(type);
-
-        // 2. Call the method
-        return calculator.Add(a, b);
+    public string GetSystemInfo()
+    {
+        return $"OS: {Environment.OSVersion} | 64Bit: {Environment.Is64BitProcess} | Ver: {Environment.Version}";
     }
 }
 
 ```
 
-### Phase 5: The Azure Host API
+## Phase 4: The Host (Azure Web API)
 
-Open `AzureSandboxHost/Program.cs` and replace with this web setup:
+Open `AzureSandboxHost/Program.cs`.
 
 ```csharp
+using Contracts;
 using ProcessSandbox.Pool;
 using ProcessSandbox.Proxy;
-using LegacyComServer; // Reference for types, but loaded via Sandbox
 
 var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
 
-// 1. Configure the 32-bit Sandbox
+// 1. Configure the Sandbox
 var config = new ProcessPoolConfiguration
 {
+    // Ensure we use the 32-bit .NET 4.8 Worker
+    DotNetVersion = DotNetVersion.Net48_32Bit, 
     MinPoolSize = 1,
     MaxPoolSize = 2,
     
-    // Point to the 32-bit DLL
-    ImplementationAssemblyPath = Path.Combine(AppContext.BaseDirectory, "LegacyComServer.dll"),
-    ImplementationTypeName = "LegacyComServer.ComAdapter",
-    
-    // FORCE 32-BIT: This tells ProcessSandbox to use the 32-bit runner
-    ExecutablePath = ProcessSandbox.Helpers.PathHelper.GetNetCoreWorkerPath(is32Bit: true)
+    // We point to the DLL. ProcessSandbox handles the tricky pathing, 
+    // and our MSBuild script handled the Manifest.
+    ImplementationAssemblyPath = Path.Combine(AppContext.BaseDirectory, "LegacyLibrary.dll"),
+    ImplementationTypeName = "LegacyLibrary.LegacyService"
 };
 
-// 2. Register the pool globally
-var pool = new ProcessPool(config, app.Services.GetRequiredService<ILoggerFactory>());
-await pool.StartAsync();
+var loggerFactory = LoggerFactory.Create(b => b.AddConsole());
+
+// 2. Create the Proxy Factory
+var proxy = await ProcessProxy.CreateAsync<ICalculator>(config, loggerFactory);
 
 app.MapGet("/", async () => 
 {
     try 
     {
-        // 3. Acquire a worker
-        using var slot = await pool.GetSlotAsync();
-        
-        // 4. Talk to the 32-bit COM object
-        // Note: We use dynamic here for simplicity of the tutorial
-        // In real life, use the Interface defined in Contracts
-        dynamic proxy = slot.CreateProxy<ComAdapter>();
-        
-        int result = await proxy.AddNumbers(10, 20);
-        
-        return Results.Ok(new { 
-            Status = "Success", 
-            Calculation = $"10 + 20 = {result}",
-            WorkerPid = slot.ProcessId,
-            Mode = "32-bit COM via Registration-Free Activation"
-        });
+        // This will FAIL locally on Mac (because Windows workers can't start),
+        // but will SUCCEED when deployed to Azure.
+        var result = proxy.Add(50, 50);
+        var info = proxy.GetSystemInfo();
+
+        return Results.Ok(new { Result = result, Info = info });
     }
     catch (Exception ex)
     {
-        return Results.Problem(ex.Message);
+        return Results.Problem($"Sandbox Error: {ex.Message}");
     }
 });
 
@@ -208,67 +185,42 @@ app.Run();
 
 ```
 
-### Phase 6: Deployment to Azure Free Tier
+### Phase 5: Deploy to Azure (Free Tier)
 
-To make this work on Azure without containers, we need to ensure the **Application Manifest** is respected.
+Now for the payoff. We will push this Mac-built code to a Windows server.
 
-1. **Publish the App:**
+1. **Install Azure CLI** (if you haven't):
 ```bash
-dotnet publish AzureSandboxHost -c Release -o ./publish
+brew install azure-cli
+az login
 
 ```
 
 
-2. **The Secret Sauce:**
-For RegFree COM to work, the *executable* (`ProcessSandbox.Worker.exe` or `dotnet.exe`) needs to know about the manifest.
-Since `ProcessSandbox` launches a worker process, we need to rename our manifest to match the worker executable name, or simply ensure they are in the same folder.
-*Manual Fix for Tutorial:* Copy `LegacyComServer.X.manifest` to `ProcessSandbox.Worker.x86.manifest` inside the publish folder.
+2. **Deploy from Terminal:**
+We use `az webapp up` which handles creating the Resource Group and App Service plan automatically.
+**Important:** We must specify `--os-type Windows` because the default for .NET 10/Core is often Linux, but we *need* Windows to run the Net48 worker.
 ```bash
-# (Inside /publish folder)
-cp LegacyComServer.X.manifest ProcessSandbox.Worker.x86.exe.manifest
+# Run this in the /ComSandboxDemo folder
+az webapp up --sku F1 --name my-unique-sandbox-app --os-type Windows --location westeurope
 
 ```
 
 
-*(Note: ProcessSandbox uses `ProcessSandbox.Worker.x86.exe` when `is32Bit: true` is requested).*
-3. **Deploy to Azure:**
-Use the Azure extension in VS Code or CLI:
-```bash
-az webapp up --sku F1 --name my-sandbox-demo --os-type Windows
+*(Replace `my-unique-sandbox-app` with a unique name).*
+3. **Wait for Deployment:**
+Azure will bundle your code, upload it, build it remotely (or use your local build), and start the site.
 
-```
+## What you will see
 
+If you run `dotnet run` locally on your Mac, it will crash when you hit the endpoint because `ProcessSandbox` cannot find `ProcessSandbox.Worker.exe` (it doesn't exist on macOS).
 
-4. **Azure Configuration (Crucial):**
-Go to the Azure Portal -> Your App -> **Configuration** -> **General Settings**.
-* **Platform:** 32 Bit (This is default for Free Tier, but good to check).
+However, navigate to your Azure URL (`https://my-unique-sandbox-app.azurewebsites.net`):
 
-
-
-### What you will see
-
-When you navigate to `https://my-sandbox-demo.azurewebsites.net`:
-
-1. **Browser Output:**
 ```json
 {
-  "status": "Success",
-  "calculation": "10 + 20 = 30",
-  "workerPid": 4056,
-  "mode": "32-bit COM via Registration-Free Activation"
+  "result": 100,
+  "info": "OS: Microsoft Windows NT 10.0.14393.0 | 64Bit: False | Ver: 4.8.4645.0"
 }
 
 ```
-
-
-2. **Behind the Scenes:**
-* Your Web API (Host) received the request.
-* It spun up a **32-bit** child process (`ProcessSandbox.Worker.exe`).
-* That child process read the `.manifest` file.
-* It loaded `LegacyComServer.comhost.dll` **without looking in the registry**.
-* It executed the code and returned the result.
-
-
-
-This video gives a deeper dive into how Registration-Free COM works, which is the core mechanic enabling this "Free Tier" architecture.
-[Registration Free COM Explained](https://www.google.com/search?q=https://www.youtube.com/watch%3Fv%3DD-Xlsm8nI4o)
