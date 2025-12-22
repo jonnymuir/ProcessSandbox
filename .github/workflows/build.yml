@@ -58,6 +58,22 @@ jobs:
       if: (github.ref == 'refs/heads/main') 
       run: dotnet nuget push ${{ github.workspace }}\artifacts\*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source "https://api.nuget.org/v3/index.json" --skip-duplicate
     
+    - name: Install Free Pascal (FPC)
+      run: |
+        choco install fpc -y
+
+    - name: Build Delphi COM Object (32-bit)
+      run: |
+        # -Pi386: Target 32-bit Intel
+        # -Mdelphi: Use Delphi syntax mode
+        fpc -Pi386 -Mdelphi -O2 src/tutorials/ComSandboxDemo/SimpleCom/SimpleComDelphi.dpr
+        
+    - name: Move Delphi DLL to artifacts
+      run: |
+        # Create directory if it doesn't exist
+        mkdir -p ${{ github.workspace }}/artifacts/native
+        move SimpleComDelphi.dll ${{ github.workspace }}/artifacts/native/    
+    
     - name: Upload artifacts
       if: (github.ref == 'refs/heads/main') 
       uses: actions/upload-artifact@v4
