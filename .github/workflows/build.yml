@@ -30,6 +30,31 @@ jobs:
       with:
         fetch-depth: 0  # Shallow clones disabled for better analysis
     
+    - name: Install Free Pascal (Manual Portable)
+      run: |
+        curl.exe -L "https://downloads.sourceforge.net/project/freepascal/Win32/3.2.2/fpc-3.2.2.i386-win32.exe" -o fpc_setup.exe
+
+        Write-Host "Installing FPC..."
+        Start-Process .\fpc_setup.exe -ArgumentList "/S /D=C:\fpc" -Wait
+        
+        # Add to Path for subsequent steps
+        $fpcPath = "C:\fpc\bin\i386-win32"
+        Add-Content -Path $env:GITHUB_PATH -Value $fpcPath
+        
+        # Also add to current session path so the VERY NEXT line can use it
+        $env:Path += ";$fpcPath"
+        
+        Write-Host "Verifying FPC installation..."
+        fpc -iV
+      shell: pwsh  
+
+    - name: Build Delphi COM Object (32-bit)
+      run: |
+        # -Pi386: Target 32-bit Intel
+        # -Mdelphi: Use Delphi syntax mode
+        fpc -Pi386 -Mdelphi -O2 src/tutorials/ComSandboxDemo/SimpleCom/SimpleComDelphi.dpr
+
+
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
@@ -57,23 +82,6 @@ jobs:
     - name: Push to NuGet.org
       if: (github.ref == 'refs/heads/main') 
       run: dotnet nuget push ${{ github.workspace }}\artifacts\*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source "https://api.nuget.org/v3/index.json" --skip-duplicate
-    
-    - name: Install Free Pascal (Manual Portable)
-      run: |
-        $fpcVersion = "3.2.2"
-        $url = "https://downloads.sourceforge.net/project/freepascal/Win32/$fpcVersion/fpc-$fpcVersion.i386-win32.zip"
-        Invoke-WebRequest -Uri $url -OutFile fpc.zip
-        Expand-Archive -Path fpc.zip -DestinationPath C:\fpc
-        # The binaries are usually deep in the zip structure
-        $fpcBin = Get-ChildItem -Path C:\fpc -Filter fpc.exe -Recurse | Select-Object -First 1 -ExpandProperty DirectoryName
-        Add-Content -Path $env:GITHUB_PATH -Value $fpcBin
-      shell: pwsh  
-        
-    - name: Build Delphi COM Object (32-bit)
-      run: |
-        # -Pi386: Target 32-bit Intel
-        # -Mdelphi: Use Delphi syntax mode
-        fpc -Pi386 -Mdelphi -O2 src/tutorials/ComSandboxDemo/SimpleCom/SimpleComDelphi.dpr
         
     - name: Move Delphi DLL to artifacts
       run: |
