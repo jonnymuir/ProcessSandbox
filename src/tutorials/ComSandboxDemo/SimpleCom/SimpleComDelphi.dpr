@@ -17,7 +17,7 @@ type
   end;
 
   { The Calculator Implementation }
-  TSimpleCalculator = class(TInterfacedObject, IUnknown, ICalculator)
+  TSimpleCalculator = class(TInterfacedObject, ICalculator)
   public
     function Add(a, b: Integer): Integer; stdcall;
     function GetInfo: WideString; stdcall;
