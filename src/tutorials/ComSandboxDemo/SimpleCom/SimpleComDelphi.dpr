@@ -50,7 +50,11 @@ var
 begin
   if unkOuter <> nil then Exit(CLASS_E_NOAGGREGATION);
   Calc := TSimpleCalculator.Create;
-  Result := Calc.QueryInterface(iid, obj);
+
+  CalcObj := TSimpleCalculator.Create;
+  Unknown := CalcObj as IUnknown; 
+  
+  Result := Unknown.QueryInterface(iid, obj);
 end;
 
 function TSimpleClassFactory.LockServer(fLock: BOOL): HResult; stdcall;
