@@ -39,6 +39,12 @@ public class WorkerConfiguration
     public int ParentProcessId { get; set; }
     
     /// <summary>
+    /// COM CLSID of the native COM object to load (if applicable).
+    /// </summary>
+    [Key(5)]
+    public Guid ComClsid { get; set; }
+
+    /// <summary>
     /// Validates the configuration.
     /// </summary>
     /// <exception cref="ConfigurationException">Thrown if configuration is invalid.</exception>
