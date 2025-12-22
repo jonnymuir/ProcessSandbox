@@ -3,7 +3,7 @@ library SimpleComDelphi;
 {$MODE DELPHI}
 
 uses
-  Windows, ActiveX;
+  Windows, ActiveX, ComObj;
 
 const
   CLSID_SimpleCalculator: TGUID = '{11111111-2222-3333-4444-555555555555}';
@@ -46,17 +46,21 @@ end;
 
 function TSimpleClassFactory.CreateInstance(const unkOuter: IUnknown; const iid: TGUID; out obj): HResult; stdcall;
 var
-  CalcObj: TSimpleCalculator;
-  Unknown: IUnknown;
+  CalcIntf: ICalculator;
 begin
   Pointer(obj) := nil;
   if unkOuter <> nil then Exit(CLASS_E_NOAGGREGATION);
 
-  CalcObj := TSimpleCalculator.Create;
-  // By casting to IUnknown, we ensure we are using the COM-standard QueryInterface
-  Unknown := CalcObj as IUnknown; 
-  
-  Result := Unknown.QueryInterface(iid, obj);
+  try
+    // 1. Create the object and immediately assign to an interface variable
+    // This sets RefCount to 1.
+    CalcIntf := TSimpleCalculator.Create;
+    
+    // 2. Query for the requested IID (usually ICalculator or IUnknown)
+    Result := CalcIntf.QueryInterface(iid, obj);
+  except
+    Result := E_UNEXPECTED;
+  end;
 end;
 
 function TSimpleClassFactory.LockServer(fLock: BOOL): HResult; stdcall;
@@ -68,13 +72,13 @@ end;
 
 function DllGetClassObject(const clsid, iid: TGUID; out obj): HResult; stdcall;
 var
-  Factory: TSimpleClassFactory;
+  FactoryIntf: IClassFactory;
 begin
+  Pointer(obj) := nil;
   if IsEqualGUID(clsid, CLSID_SimpleCalculator) then
   begin
-    Factory := TSimpleClassFactory.Create;
-    // We must QueryInterface the factory to the requested IID (usually IClassFactory)
-    Result := Factory.QueryInterface(iid, obj);
+    FactoryIntf := TSimpleClassFactory.Create;
+    Result := FactoryIntf.QueryInterface(iid, obj);
   end
   else
     Result := CLASS_E_CLASSNOTAVAILABLE;
