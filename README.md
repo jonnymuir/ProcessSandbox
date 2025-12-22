@@ -32,7 +32,7 @@ You have legacy code that:
 
 See the [tutorial](Tutorial.md) for an easy to follow example of how ProcessSandbox.Runner works.
 
-See the [com tutorial(TutorialCom.md)] to see an example of how to call a 32 bit com object in an Azure App Service.
+See the [com tutorial](TutorialCom.md) to see an example of how to call a 32 bit com object in an Azure App Service.
 
 ### Installation
 
