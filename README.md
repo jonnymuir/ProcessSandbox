@@ -5,6 +5,12 @@
 
 Process isolation library for .NET that protects your application from legacy, unmanaged, or problematic code by running it in separate sandboxed processes.
 
+## Jump straight to the live demo
+
+[live demo here](https://com-sandbox-demo-app.azurewebsites.net)
+
+![Calculator showing it running via the C Com Object](image-1.png)
+
 ## The Problem
 
 You have legacy code that:
