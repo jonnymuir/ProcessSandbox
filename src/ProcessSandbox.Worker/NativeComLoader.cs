@@ -1,5 +1,6 @@
 using System;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 
 namespace ProcessSandbox.Worker;
 
@@ -8,31 +9,32 @@ namespace ProcessSandbox.Worker;
 /// </summary>
 public static class NativeComLoader
 {
-    // 1. Native API Imports
-    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Ansi)]
+    [DllImport("kernel32.dll", SetLastError = true)]
     private static extern IntPtr LoadLibrary(string lpFileName);
 
-    [DllImport("kernel32.dll", CharSet = CharSet.Ansi)]
+    [DllImport("kernel32.dll")]
     private static extern IntPtr GetProcAddress(IntPtr hModule, string lpProcName);
 
-    // 2. COM Definitions
+    // Use IntPtr for the output to avoid auto-marshalling "Variant" errors
     private delegate int DllGetClassObjectDelegate(
         [In] ref Guid clsid,
         [In] ref Guid iid,
-        [Out, MarshalAs(UnmanagedType.Interface)] out object ppv);
+        out IntPtr ppv);
 
     [ComImport]
     [Guid("00000001-0000-0000-C000-000000000046")]
     [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
     private interface IClassFactory
     {
-        void CreateInstance([MarshalAs(UnmanagedType.IUnknown)] object pUnkOuter, ref Guid riid, out object ppv);
-        void LockServer(bool fLock);
+        // Use PreserveSig to match the Delphi stdcall HRESULT
+        [PreserveSig]
+        int CreateInstance(IntPtr pUnkOuter, ref Guid riid, out IntPtr ppv);
+        [PreserveSig]
+        int LockServer(bool fLock);
     }
 
-
     /// <summary>
-    /// Creates an instance of a COM object from a native DLL without registration
+    /// Creates an instance of a native COM object from a DLL without registration
     /// </summary>
     /// <param name="dllPath"></param>
     /// <param name="clsid"></param>
@@ -42,32 +44,47 @@ public static class NativeComLoader
     /// <exception cref="COMException"></exception>
     public static object CreateInstance(string dllPath, Guid clsid, Type interfaceType)
     {
-        // A. Load the DLL into this process
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            throw new PlatformNotSupportedException(
+                "Direct COM loading is only supported on Windows. " +
+                "Check your configuration or deployment environment.");
+        }
+
         IntPtr hModule = LoadLibrary(dllPath);
         if (hModule == IntPtr.Zero)
-            throw new Exception($"Native DLL not found or failed to load: {dllPath} (Error: {Marshal.GetLastWin32Error()})");
+            throw new Exception($"Native DLL failed to load: {dllPath}");
 
-        // B. Find the Entry Point
         IntPtr pAddress = GetProcAddress(hModule, "DllGetClassObject");
         if (pAddress == IntPtr.Zero)
-            throw new Exception("DLL does not export DllGetClassObject. Is it a valid COM server?");
+            throw new Exception("DllGetClassObject not found in DLL.");
 
-        // C. Convert function pointer to delegate
         var dllGetClassObject = Marshal.GetDelegateForFunctionPointer<DllGetClassObjectDelegate>(pAddress);
 
-        // D. Call DllGetClassObject to get the Class Factory
         Guid iidIClassFactory = typeof(IClassFactory).GUID;
-        int hr = dllGetClassObject(ref clsid, ref iidIClassFactory, out object factoryObj);
-        
-        if (hr < 0 || factoryObj == null)
-            throw new COMException($"Failed to get IClassFactory for CLSID {clsid}", hr);
 
-        // E. Ask the Factory to create the object
-        var factory = (IClassFactory)factoryObj;
-        Guid iidInterface = interfaceType.GUID; // This relies on the [Guid] attribute being present on the interface!
-        
-        factory.CreateInstance(null!, ref iidInterface, out object instance);
-        
-        return instance; // This is now a raw RCW cast to the specific interface
+        // 1. Get the factory as a raw pointer first
+        int hr = dllGetClassObject(ref clsid, ref iidIClassFactory, out IntPtr pFactory);
+        if (hr < 0) throw new COMException("DllGetClassObject failed", hr);
+
+        try
+        {
+            // 2. Wrap the pointer in our IClassFactory interface
+            var factory = (IClassFactory)Marshal.GetObjectForIUnknown(pFactory);
+
+            // 3. Create the actual object instance
+            Guid iidInterface = interfaceType.GUID;
+            hr = factory.CreateInstance(IntPtr.Zero, ref iidInterface, out IntPtr pInstance);
+
+            if (hr < 0) throw new COMException("IClassFactory.CreateInstance failed", hr);
+
+            // 4. Convert the final pointer to a .NET object cast to the interface
+            return Marshal.GetObjectForIUnknown(pInstance);
+        }
+        finally
+        {
+            // Clean up the factory pointer
+            if (pFactory != IntPtr.Zero) Marshal.Release(pFactory);
+        }
     }
 }

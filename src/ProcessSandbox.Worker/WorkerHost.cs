@@ -22,7 +22,7 @@ public class WorkerHost(WorkerConfiguration config, ILoggerFactory loggerFactory
 {
     private readonly ILogger<WorkerHost> _logger = loggerFactory.CreateLogger<WorkerHost>();
     private readonly CancellationTokenSource _shutdownCts = new CancellationTokenSource();
-    
+
     private NamedPipeServerChannel? _channel;
     private MethodInvoker? _methodInvoker;
     private bool _disposed;
@@ -43,7 +43,7 @@ public class WorkerHost(WorkerConfiguration config, ILoggerFactory loggerFactory
             // ---------------------------------------------------------
             // 1. DETERMINISTIC LOADING STRATEGY
             // ---------------------------------------------------------
-            
+
             // Check if this is a Native COM activation request
             // We can detect this if a CLSID is provided in config, OR by checking the file header.
             // Here we use a Try/Catch approach on AssemblyName.GetAssemblyName for robustness.
@@ -69,7 +69,7 @@ public class WorkerHost(WorkerConfiguration config, ILoggerFactory loggerFactory
             {
                 // -- STRATEGY B: NATIVE DIRECT COM --
                 _logger.LogInformation("Detected Native DLL. Attempting Direct COM Load...");
-                
+
                 Guid clsid;
 
                 if (config.ComClsid != Guid.Empty)
@@ -81,10 +81,9 @@ public class WorkerHost(WorkerConfiguration config, ILoggerFactory loggerFactory
                     throw new ArgumentException("Native COM loading requires a CLSID. Pass it in config or append to TypeName (Type|GUID).");
                 }
 
-                // We need to load the assembly containing the Interface definition (e.g. Contracts.dll)
-                // Assuming Contracts.dll is in the same folder as the worker
-                targetType = Type.GetType(config.TypeName) 
-                             ?? throw new Exception($"Could not find Interface Type '{config.TypeName}'. Ensure Contracts.dll is referenced.");
+                targetType = ResolveInterfaceType(config.TypeName) 
+                             ?? throw new Exception($"Could not find Interface Type '{config.TypeName}'");
+                
 
                 targetInstance = NativeComLoader.CreateInstance(config.AssemblyPath, clsid, targetType);
             }
@@ -94,13 +93,13 @@ public class WorkerHost(WorkerConfiguration config, ILoggerFactory loggerFactory
             // ---------------------------------------------------------
             // 2. SETUP METHOD INVOKER
             // ---------------------------------------------------------
-            
+
             // Important: We must pass 'targetType' explicitly. 
             // If targetInstance is a COM object, GetType() returns System.__ComObject, which breaks Reflection.
             // You might need to add a constructor to MethodInvoker that accepts the Type explicitly.
             _methodInvoker = new MethodInvoker(
                 targetInstance,
-                targetType, 
+                targetType,
                 loggerFactory.CreateLogger<MethodInvoker>());
 
             // ---------------------------------------------------------
@@ -266,6 +265,47 @@ public class WorkerHost(WorkerConfiguration config, ILoggerFactory loggerFactory
         }
 
         _logger.LogInformation("Cleanup complete");
+    }
+
+    private Type? ResolveInterfaceType(string typeName)
+    {
+        // 1. Try standard resolution first (in case it's already loaded or in GAC)
+        var type = Type.GetType(typeName);
+        if (type != null) return type;
+
+        _logger.LogInformation("Type '{Type}' not found in local context. Probing parent directories...", typeName);
+
+        // 2. Guess the assembly name from the namespace (e.g. "Contracts.ICalculator" -> "Contracts.dll")
+        // This is a heuristic; in production you might want explicit config for this.
+        string assemblyName = typeName.Split('.')[0] + ".dll";
+
+        // 3. Walk up the directory tree to find the DLL
+        string currentDir = AppDomain.CurrentDomain.BaseDirectory;
+        string? foundPath = null;
+
+        for (int i = 0; i < 5; i++) // Check up to 5 levels up
+        {
+            string candidate = Path.Combine(currentDir, assemblyName);
+            if (File.Exists(candidate))
+            {
+                foundPath = candidate;
+                break;
+            }
+
+            var parent = Directory.GetParent(currentDir);
+            if (parent == null) break;
+            currentDir = parent.FullName;
+        }
+
+        if (foundPath != null)
+        {
+            _logger.LogInformation("Found dependency at: {Path}", foundPath);
+            // Load the assembly into the current context
+            var asm = Assembly.LoadFrom(foundPath);
+            return asm.GetType(typeName);
+        }
+
+        return null;
     }
 
     /// <summary>

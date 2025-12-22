@@ -20,7 +20,7 @@ var config = new ProcessPoolConfiguration
         "workers", "net48", "win-x86", "SimpleCom.dll"),
 
     ImplementationTypeName = "Contracts.ICalculator",
-    ComClsid = new Guid("11111111-2222-3333-4444-55555555555")      
+    ComClsid = new Guid("11111111-2222-3333-4444-555555555555")      
 };
 
 var loggerFactory = LoggerFactory.Create(b => 
