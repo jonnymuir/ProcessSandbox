@@ -68,6 +68,11 @@ public static class ProcessProxy
 
         loggerFactory ??= NullLoggerFactory.Instance;
 
+        if(configuration.ImplementationTypeName == null)
+        {
+            configuration.ImplementationTypeName = typeof(TInterface).FullName!;
+        }
+
         var pool = new ProcessPool(configuration, loggerFactory);
         await pool.InitializeAsync();
 

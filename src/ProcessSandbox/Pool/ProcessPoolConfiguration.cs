@@ -135,9 +135,6 @@ public class ProcessPoolConfiguration
         if (string.IsNullOrWhiteSpace(ImplementationAssemblyPath))
             throw new Abstractions.ConfigurationException("ImplementationAssemblyPath is required");
 
-        if (string.IsNullOrWhiteSpace(ImplementationTypeName))
-            throw new Abstractions.ConfigurationException("ImplementationTypeName is required");
-
         if (MaxMemoryMB <= 0)
             throw new Abstractions.ConfigurationException("MaxMemoryMB must be positive");
 
@@ -161,31 +158,5 @@ public class ProcessPoolConfiguration
 
         if (ProcessStartTimeout <= TimeSpan.Zero)
             throw new Abstractions.ConfigurationException("ProcessStartTimeout must be positive");
-    }
-
-    /// <summary>
-    /// Creates a copy of this configuration.
-    /// </summary>
-    /// <returns>A new instance with the same values.</returns>
-    public ProcessPoolConfiguration Clone()
-    {
-        return new ProcessPoolConfiguration
-        {
-            MinPoolSize = MinPoolSize,
-            MaxPoolSize = MaxPoolSize,
-            WorkerExecutablePath = WorkerExecutablePath,
-            DotNetVersion = DotNetVersion,
-            ImplementationAssemblyPath = ImplementationAssemblyPath,
-            ImplementationTypeName = ImplementationTypeName,
-            MaxMemoryMB = MaxMemoryMB,
-            MaxGdiHandles = MaxGdiHandles,
-            MaxUserHandles = MaxUserHandles,
-            MaxTotalHandles = MaxTotalHandles,
-            ProcessRecycleThreshold = ProcessRecycleThreshold,
-            MaxProcessLifetime = MaxProcessLifetime,
-            MethodCallTimeout = MethodCallTimeout,
-            ProcessStartTimeout = ProcessStartTimeout,
-            VerboseWorkerLogging = VerboseWorkerLogging
-        };
     }
 }
