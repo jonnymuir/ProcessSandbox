@@ -13,27 +13,5 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Contracts\Contracts.csproj" />
-    <ProjectReference Include="..\LegacyLibrary\LegacyLibrary.csproj" />
   </ItemGroup>
-  <ItemGroup>
-    <None Include="LegacyLibrary.X.manifest" />
-  </ItemGroup>
-
-  <Target Name="CopyManifestToWorkerFolder" AfterTargets="Build;Publish">
-    <PropertyGroup>
-      <ActualDestination Condition="'$(PublishDir)' != ''">$(PublishDir)</ActualDestination>
-      <ActualDestination Condition="'$(PublishDir)' == ''">$(OutputPath)</ActualDestination>
-
-      <WorkerPath>$(ActualDestination)workers/net48/win-x86</WorkerPath>
-      <ManifestName>ProcessSandbox.Worker.exe.manifest</ManifestName>
-    </PropertyGroup>
-
-    <Message Text="Deploying COM Manifest to: $(WorkerPath)" Importance="high" />
-
-    <MakeDir Directories="$(WorkerPath)" />
-
-    <Copy SourceFiles="LegacyLibrary.X.manifest"
-      DestinationFiles="$(WorkerPath)/$(ManifestName)"
-      OverwriteReadOnlyFiles="true" />
-  </Target>
 </Project>

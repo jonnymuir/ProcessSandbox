@@ -17,105 +17,25 @@ dotnet new sln
 # 3. Create the "Host" app (The Azure Web API)
 dotnet new webapi -n AzureSandboxHost -f net10.0
 
-# 4. Create the "Legacy Library" 
-# We create it as standard 2.0 first to satisfy the Mac CLI
-dotnet new classlib -n LegacyLibrary -f netstandard2.0
-
-# 5. Create the Contracts (Shared Interface)
+# 4. Create the Contracts (Shared Interface)
 dotnet new classlib -n Contracts -f netstandard2.0
 
-# 6. Link projects to solution
+# 5. Link projects to solution
 dotnet sln add AzureSandboxHost/AzureSandboxHost.csproj
-dotnet sln add LegacyLibrary/LegacyLibrary.csproj
 dotnet sln add Contracts/Contracts.csproj
 
-# 7. Add References
+# 6. Add References
 dotnet add AzureSandboxHost/AzureSandboxHost.csproj reference Contracts/Contracts.csproj
-dotnet add LegacyLibrary/LegacyLibrary.csproj reference Contracts/Contracts.csproj
-dotnet add AzureSandboxHost/AzureSandboxHost.csproj reference LegacyLibrary/LegacyLibrary.csproj
 
-# 8. Install ProcessSandbox packages
+# 7. Install ProcessSandbox packages
 dotnet add AzureSandboxHost/AzureSandboxHost.csproj package ProcessSandbox.Runner --prerelease
 dotnet add Contracts/Contracts.csproj package ProcessSandbox.Abstractions --prerelease
 
-# 9. Add the CSharp Package for the com object stuff
-dotnet add LegacyLibrary/LegacyLibrary.csproj package Microsoft.CSharp
-
 ```
 
-### Manually change Legacy Library to net48
+## Phase 2: The Contracts
 
-Open `LegacyLibrary/LegacyLibrary.csproj` in VS Code.
-
-Change `<TargetFramework>netstandard2.0</TargetFramework>` to `<TargetFramework>net48</TargetFramework>`.
-
-It should look like this:
-
-```xml
-<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <TargetFramework>net48</TargetFramework> 
-    <LangVersion>latest</LangVersion>
-  </PropertyGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\Contracts\Contracts.csproj" />
-  </ItemGroup>
-</Project>
-```
-
-## Phase 2: The "Hidden" Manifest Strategy
-
-The `ProcessSandbox` package unpacks its worker executable into a deep folder: `workers/net48/win-x86/ProcessSandbox.Worker.exe`.
-
-For Registration-Free COM to work, our manifest **must** sit right next to that executable. We will use an MSBuild script to automate this copy.
-
-1. Create `AzureSandboxHost/LegacyLibrary.X.manifest`:
-
-```xml
-<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
-  <assemblyIdentity name="MyCustomContext" version="1.0.0.0" type="win32" />
-
-  <file name="SimpleCom.dll">
-    <comClass 
-        clsid="{11111111-2222-3333-4444-555555555555}" 
-        threadingModel="Both" />
-  </file>
-</assembly>
-
-```
-
-2. **The Critical Step:** Open `AzureSandboxHost/AzureSandboxHost.csproj` and add this logic at the end (before `</Project>`). This ensures the manifest lands in the right spot during Build and Publish.
-
-```xml
-  <ItemGroup>
-    <None Include="LegacyLibrary.X.manifest" />
-  </ItemGroup>
-
-  <Target Name="CopyManifestToWorkerFolder" AfterTargets="Build;Publish">
-    <PropertyGroup>
-      <ActualDestination Condition="'$(PublishDir)' != ''">$(PublishDir)</ActualDestination>
-      <ActualDestination Condition="'$(PublishDir)' == ''">$(OutputPath)</ActualDestination>
-
-      <WorkerPath>$(ActualDestination)workers/net48/win-x86</WorkerPath>
-      <ManifestName>ProcessSandbox.Worker.exe.manifest</ManifestName>
-    </PropertyGroup>
-
-    <Message Text="Deploying COM Manifest to: $(WorkerPath)" Importance="high" />
-
-    <MakeDir Directories="$(WorkerPath)" />
-
-    <Copy SourceFiles="LegacyLibrary.X.manifest"
-      DestinationFiles="$(WorkerPath)/$(ManifestName)"
-      OverwriteReadOnlyFiles="true" />
-  </Target>
-
-```
-
-## Phase 3: The Code (Contracts & Legacy)
-
-**1. Contracts (`Contracts/ICalculator.cs`):**
+** Contracts (`Contracts/ICalculator.cs`):**
 
 ```csharp
 using System.Runtime.InteropServices;
@@ -147,140 +67,7 @@ public interface ICalculator
 
 ```
 
-**2. Legacy Library Service (`LegacyLibrary/LegacyService.cs`):**
-
-This is the wrapper round our com object call
-
-```csharp
-using System;
-using System.Runtime.InteropServices;
-using Contracts;
-
-namespace LegacyLibrary;
-
-
-/// <summary>
-/// A legacy service that uses the COM Calculator internally
-/// </summary>
-public class LegacyService : ICalculator
-{
-
-    private static ICalculator GetComObject()
-    {
-        // Get the path to the manifest sitting next to the Worker EXE
-        string manifestPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ProcessSandbox.Worker.exe.manifest");
-
-        // Manually push the manifest into the Windows activation stack
-        using (new ActivationContext(manifestPath))
-        {
-            Type comType = Type.GetTypeFromCLSID(Guid.Parse("11111111-2222-3333-4444-555555555555"))
-                ?? throw new Exception("Native COM Class not found in Context!");
-
-            object comObject = Activator.CreateInstance(comType);
-            return (ICalculator)comObject;
-        }
-    }
-
-    /// <summary>
-    /// Adds two integers using the COM Calculator
-    /// </summary>
-    /// <param name="a"></param>
-    /// <param name="b"></param>
-    /// <returns></returns>
-    public int Add(int a, int b)
-    {
-        var calc = GetComObject();
-        return calc.Add(a, b);
-    }
-
-    /// <summary>
-    /// Gets system information
-    /// </summary>
-    /// <returns></returns>
-    public string GetInfo()
-    {
-        var calc = GetComObject();
-        return calc.GetInfo();
-    }
-}
-
-```
-
-**3. Legacy Library Activator Context (`LegacyLibrary/ActivatorContext.cs`):**
-
-This is required so that we can run our com object in an azure app service without the need to register it.
-
-It manually pushes the manifest and the context onto the windows activation stack.
-
-```csharp
-using System;
-using System.Runtime.InteropServices;
-
-namespace LegacyLibrary;
-
-/// <summary>
-/// Manages a Windows Activation Context for COM manifest activation
-/// </summary>
-public class ActivationContext : IDisposable
-{
-    private struct ACTCTX
-    {
-        public int cbSize;
-        public uint dwFlags;
-        public string lpSource;
-        public ushort wProcessorArchitecture;
-        public ushort wLangId;
-        public string lpAssemblyDirectory;
-        public string lpResourceName;
-        public string lpApplicationName;
-        public IntPtr hModule;
-    }
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern IntPtr CreateActCtx(ref ACTCTX actctx);
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern bool ActivateActCtx(IntPtr hActCtx, out IntPtr lpCookie);
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern bool DeactivateActCtx(uint dwFlags, IntPtr ulCookie);
-
-    private IntPtr _hActCtx = IntPtr.Zero;
-    private IntPtr _cookie = IntPtr.Zero;
-
-    /// <summary>
-    /// Creates and activates an Activation Context from the given manifest path
-    /// </summary>
-    /// <param name="manifestPath"></param>
-    /// <exception cref="Exception"></exception>
-    public ActivationContext(string manifestPath)
-    {
-        var context = new ACTCTX {
-            cbSize = Marshal.SizeOf(typeof(ACTCTX)),
-            lpSource = manifestPath,
-            dwFlags = 0 // ACTCTX_FLAG_PROCESSOR_ARCHITECTURE_VALID not needed for simple path
-        };
-
-        _hActCtx = CreateActCtx(ref context);
-        if (_hActCtx == new IntPtr(-1)) 
-            throw new Exception($"Failed to create Activation Context for {manifestPath}. Error: {Marshal.GetLastWin32Error()}");
-
-        if (!ActivateActCtx(_hActCtx, out _cookie))
-            throw new Exception("Failed to activate Activation Context.");
-    }
-
-    /// <summary>
-    /// Disposes the Activation Context
-    /// </summary>
-    public void Dispose()
-    {
-        if (_cookie != IntPtr.Zero) DeactivateActCtx(0, _cookie);
-    }
-}
-
-```
-
-## Phase 4: The Host (Azure Web API)
+## Phase 3: The Host (Azure Web API)
 
 A nice simple calculator interface to test calling the com object via the net48 32 bit proxy
 
@@ -303,10 +90,13 @@ var config = new ProcessPoolConfiguration
     MinPoolSize = 1,
     MaxPoolSize = 2,
     
-    // We point to the DLL. ProcessSandbox handles the tricky pathing, 
-    // and our MSBuild script handled the Manifest.
-    ImplementationAssemblyPath = Path.Combine(AppContext.BaseDirectory, "LegacyLibrary.dll"),
-    ImplementationTypeName = "LegacyLibrary.LegacyService"
+    // The com object needs putting in the win-x86 folder manually 
+    ImplementationAssemblyPath = Path.Combine(
+        AppContext.BaseDirectory, 
+        "workers", "net48", "win-x86", "SimpleCom.dll"),
+
+    ImplementationTypeName = "Contracts.ICalculator",
+    ComClsid = new Guid("11111111-2222-3333-4444-555555555555")      
 };
 
 var loggerFactory = LoggerFactory.Create(b => 
@@ -433,7 +223,7 @@ app.Run();
 
 ```
 
-### Phase 5: The com object 
+### Phase 4: The com object 
 
 For this we create a simple c com object.
 
@@ -661,7 +451,7 @@ However, navigate to your Azure URL (`https://my-unique-sandbox-app.azurewebsite
 
 There is a [live demo here](https://com-sandbox-demo-app.azurewebsites.net)
 
-![Calculator showing it running via the Delphi Com Object](image-1.png)
+![Calculator showing it running via the C Com Object](image-1.png)
 
 ## Added bonus com object
 
@@ -781,4 +571,4 @@ Put it into the workers/net48/win-x86 folder and change the manifest file in the
 
 You are now calling delphi code through your proxy.
 
-![alt text](image.png)
+![aCalculator showing it running via the Delphi Com Object](image.png)
