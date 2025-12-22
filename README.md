@@ -149,12 +149,6 @@ Your App (.NET) → ProcessProxy<T> → [Worker Pool] → Worker Process
 - **Worker Process**: Isolated process hosting your implementation
 - **IPC**: Named pipes with MessagePack serialization
 
-## Requirements
-
-- Windows (Job Objects for orphan prevention)
-- .NET 8.0 / 10.0 or .NET Framework 4.8
-- Administrator rights not required
-
 ## Building
 
 ```bash
