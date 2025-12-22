@@ -46,12 +46,14 @@ end;
 
 function TSimpleClassFactory.CreateInstance(const unkOuter: IUnknown; const iid: TGUID; out obj): HResult; stdcall;
 var
-  Calc: TSimpleCalculator;
+  CalcObj: TSimpleCalculator;
+  Unknown: IUnknown;
 begin
+  Pointer(obj) := nil;
   if unkOuter <> nil then Exit(CLASS_E_NOAGGREGATION);
-  Calc := TSimpleCalculator.Create;
 
   CalcObj := TSimpleCalculator.Create;
+  // By casting to IUnknown, we ensure we are using the COM-standard QueryInterface
   Unknown := CalcObj as IUnknown; 
   
   Result := Unknown.QueryInterface(iid, obj);
