@@ -572,7 +572,7 @@ On a mac you can do this:
 brew install mingw-w64
 ```
 
-And then to build you need to the following. Pay close attention to the flags, you require these to make it completely stand alond and have the right entry points. Com is fiddly!
+And then to build you need to the following. Pay close attention to the flags, you require these to make it completely stand alone and have the right entry points. Com is fiddly!
 
 
 Also note here we are pushing it to a publish folder. When you deploy your zip file to azure you will need the SimpleCom.dll in there.
