@@ -1,6 +1,0 @@
-@AzureSandboxHost_HostAddress = http://localhost:5211
-
-GET {{AzureSandboxHost_HostAddress}}/weatherforecast/
-Accept: application/json
-
-###
