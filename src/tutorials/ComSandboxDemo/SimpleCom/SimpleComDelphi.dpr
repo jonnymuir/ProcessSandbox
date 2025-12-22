@@ -13,14 +13,14 @@ type
   ICalculator = interface(IUnknown)
     ['{E1234567-ABCD-1234-EF12-0123456789AB}']
     function Add(a, b: Integer): Integer; stdcall;
-    function GetInfo: WideString; stdcall;
+    function GetInfo: TBSTR; stdcall;
   end;
 
   { The Calculator Implementation }
   TSimpleCalculator = class(TInterfacedObject, ICalculator)
   public
     function Add(a, b: Integer): Integer; stdcall;
-    function GetInfo: WideString; stdcall;
+    function GetInfo: TBSTR; stdcall;
   end;
 
   { The Class Factory Implementation }
@@ -37,9 +37,14 @@ begin
   Result := a + b;
 end;
 
-function TSimpleCalculator.GetInfo: WideString; stdcall;
+function TSimpleCalculator.GetInfo: TBSTR; stdcall;
+var
+  S: WideString;
 begin
-  Result := 'Running the manual Delphi FPC COM object';
+  S := 'Running the manual Delphi FPC COM object';
+  // This creates a COM-owned copy of the string.
+  // .NET will call SysFreeString on this pointer.
+  Result := SysAllocStringLen(PWideChar(S), Length(S));
 end;
 
 { TSimpleClassFactory }
