@@ -98,7 +98,7 @@ jobs:
       run: |
         # Create directory if it doesn't exist
         mkdir -p ${{ github.workspace }}/artifacts/native
-        move SimpleComDelphi.dll ${{ github.workspace }}/artifacts/native/    
+        move src\tutorials\ComSandboxDemo\SimpleCom\SimpleComDelphi.dll ${{ github.workspace }}/artifacts/native/    
     
     - name: Upload artifacts
       if: (github.ref == 'refs/heads/main') 
