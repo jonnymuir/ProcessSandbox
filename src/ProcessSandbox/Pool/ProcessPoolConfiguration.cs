@@ -62,6 +62,11 @@ public class ProcessPoolConfiguration
     public string ImplementationTypeName { get; set; } = string.Empty;
 
     /// <summary>
+    /// COM CLSID of the native COM object to load (if applicable).
+    /// </summary>
+    public Guid ComClsid { get; set; }
+
+    /// <summary>
     /// Gets or sets the maximum memory usage in megabytes before recycling a worker.
     /// </summary>
     public long MaxMemoryMB { get; set; } = 1024;

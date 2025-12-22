@@ -14,10 +14,13 @@ var config = new ProcessPoolConfiguration
     MinPoolSize = 1,
     MaxPoolSize = 2,
     
-    // We point to the DLL. ProcessSandbox handles the tricky pathing, 
-    // and our MSBuild script handled the Manifest.
-    ImplementationAssemblyPath = Path.Combine(AppContext.BaseDirectory, "LegacyLibrary.dll"),
-    ImplementationTypeName = "LegacyLibrary.LegacyService"
+    // The com object needs putting in the win-x86 folder manually 
+    ImplementationAssemblyPath = Path.Combine(
+        AppContext.BaseDirectory, 
+        "workers", "net48", "win-x86", "SimpleCom.dll"),
+
+    ImplementationTypeName = "Contracts.ICalculator",
+    ComClsid = new Guid("11111111-2222-3333-4444-55555555555")      
 };
 
 var loggerFactory = LoggerFactory.Create(b => 
