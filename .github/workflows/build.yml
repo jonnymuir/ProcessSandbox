@@ -58,9 +58,10 @@ jobs:
       if: (github.ref == 'refs/heads/main') 
       run: dotnet nuget push ${{ github.workspace }}\artifacts\*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source "https://api.nuget.org/v3/index.json" --skip-duplicate
     
-    - name: Install Free Pascal (FPC)
-      run: |
-        choco install fpc -y
+    - name: Install Free Pascal
+      uses: fpc-setup/setup-fpc@v1.1
+      with:
+        fpc-version: '3.2.2' # Stable version
 
     - name: Build Delphi COM Object (32-bit)
       run: |
