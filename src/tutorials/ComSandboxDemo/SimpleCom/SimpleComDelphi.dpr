@@ -42,9 +42,9 @@ var
   S: WideString;
 begin
   S := 'Running the manual Delphi FPC COM object';
-  // This creates a COM-owned copy of the string.
-  // .NET will call SysFreeString on this pointer.
-  Result := SysAllocStringLen(PWideChar(S), Length(S));
+  // Use SysAllocString instead of SysAllocStringLen
+  // PWideChar(S) points to the start of the WideString data
+  Result := SysAllocString(PWideChar(S));
 end;
 
 { TSimpleClassFactory }
