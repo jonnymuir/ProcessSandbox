@@ -10,8 +10,14 @@ const
   IID_ICalculator: TGUID        = '{E1234567-ABCD-1234-EF12-0123456789AB}';
 
 type
+  ICalculator = interface(IUnknown)
+    ['{E1234567-ABCD-1234-EF12-0123456789AB}']
+    function Add(a, b: Integer): Integer; stdcall;
+    function GetInfo: WideString; stdcall;
+  end;
+
   { The Calculator Implementation }
-  TSimpleCalculator = class(TInterfacedObject, IUnknown)
+  TSimpleCalculator = class(TInterfacedObject, IUnknown, ICalculator)
   public
     function Add(a, b: Integer): Integer; stdcall;
     function GetInfo: WideString; stdcall;
