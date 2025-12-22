@@ -4,6 +4,10 @@
     <ProjectReference Include="..\Contracts\Contracts.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net48</TargetFramework>
   </PropertyGroup>

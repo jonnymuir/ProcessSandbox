@@ -38,6 +38,9 @@ dotnet add AzureSandboxHost/AzureSandboxHost.csproj reference LegacyLibrary/Lega
 dotnet add AzureSandboxHost/AzureSandboxHost.csproj package ProcessSandbox.Runner --prerelease
 dotnet add Contracts/Contracts.csproj package ProcessSandbox.Abstractions --prerelease
 
+# 9. Add the CSharp Package for the com object stuff
+dotnet add LegacyLibrary/LegacyLibrary.csproj package Microsoft.CSharp
+
 ```
 
 ### Manually change Legacy Library to net48
@@ -72,9 +75,12 @@ For Registration-Free COM to work, our manifest **must** sit right next to that 
 ```xml
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
-  <assemblyIdentity name="LegacyLibrary.X" version="1.0.0.0" type="win32"/>
-  <file name="LegacyLibrary.dll">
-    <comClass clsid="{11111111-2222-3333-4444-555555555555}" threadingModel="Both" progid="Legacy.Calculator" />
+  <assemblyIdentity name="MyCustomContext" version="1.0.0.0" type="win32" />
+
+  <file name="SimpleCom.dll">
+    <comClass 
+        clsid="{11111111-2222-3333-4444-555555555555}" 
+        threadingModel="Both" />
   </file>
 </assembly>
 
@@ -112,11 +118,14 @@ For Registration-Free COM to work, our manifest **must** sit right next to that 
 **1. Contracts (`Contracts/ICalculator.cs`):**
 
 ```csharp
+using System.Runtime.InteropServices;
 namespace Contracts;
 
 /// <summary>
 /// A simple calculator interface
 /// </summary>
+[Guid("E1234567-ABCD-1234-EF12-0123456789AB")] // Matches the IID in our C code
+[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
 public interface ICalculator
 {
     /// <summary>
@@ -125,17 +134,22 @@ public interface ICalculator
     /// <param name="a"></param>
     /// <param name="b"></param>
     /// <returns></returns>
+    [PreserveSig] // Native COM usually returns HRESULT; this ensures 'int' is treated as the direct return
     int Add(int a, int b);
     /// <summary>
     /// Gets system information
     /// </summary>
     /// <returns></returns>
-    string GetSystemInfo();
+    [PreserveSig]
+    [return: MarshalAs(UnmanagedType.BStr)] // Explicitly tell .NET to expect a BSTR
+    string GetInfo();
 }
 
 ```
 
-**2. Legacy Library (`LegacyLibrary/LegacyService.cs`):**
+**2. Legacy Library Service (`LegacyLibrary/LegacyService.cs`):**
+
+This is the wrapper round our com object call
 
 ```csharp
 using System;
@@ -144,28 +158,29 @@ using Contracts;
 
 namespace LegacyLibrary;
 
-/// <summary>
-/// The COM-visible Calculator class
-/// </summary>
-[ComVisible(true)]
-[Guid("11111111-2222-3333-4444-555555555555")]
-[ProgId("Legacy.Calculator")]
-public class Calculator
-{
-    /// <summary>
-    /// Adds two integers
-    /// </summary>
-    /// <param name="a"></param>
-    /// <param name="b"></param>
-    /// <returns></returns>
-    public int Add(int a, int b) => a + b;
-}
 
 /// <summary>
 /// A legacy service that uses the COM Calculator internally
 /// </summary>
 public class LegacyService : ICalculator
 {
+
+    private static ICalculator GetComObject()
+    {
+        // Get the path to the manifest sitting next to the Worker EXE
+        string manifestPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ProcessSandbox.Worker.exe.manifest");
+
+        // Manually push the manifest into the Windows activation stack
+        using (new ActivationContext(manifestPath))
+        {
+            Type comType = Type.GetTypeFromCLSID(Guid.Parse("11111111-2222-3333-4444-555555555555"))
+                ?? throw new Exception("Native COM Class not found in Context!");
+
+            object comObject = Activator.CreateInstance(comType);
+            return (ICalculator)comObject;
+        }
+    }
+
     /// <summary>
     /// Adds two integers using the COM Calculator
     /// </summary>
@@ -174,18 +189,92 @@ public class LegacyService : ICalculator
     /// <returns></returns>
     public int Add(int a, int b)
     {
-        // Simple instantiation inside the 32-bit process
-        var com = new Calculator();
-        return com.Add(a, b);
+        var calc = GetComObject();
+        return calc.Add(a, b);
     }
 
     /// <summary>
     /// Gets system information
     /// </summary>
     /// <returns></returns>
-    public string GetSystemInfo()
+    public string GetInfo()
     {
-        return $"OS: {Environment.OSVersion} | 64Bit: {Environment.Is64BitProcess} | Ver: {Environment.Version}";
+        var calc = GetComObject();
+        return calc.GetInfo();
+    }
+}
+
+```
+
+**3. Legacy Library Activator Context (`LegacyLibrary/ActivatorContext.cs`):**
+
+This is required so that we can run our com object in an azure app service without the need to register it.
+
+It manually pushes the manifest and the context onto the windows activation stack.
+
+```csharp
+using System;
+using System.Runtime.InteropServices;
+
+namespace LegacyLibrary;
+
+/// <summary>
+/// Manages a Windows Activation Context for COM manifest activation
+/// </summary>
+public class ActivationContext : IDisposable
+{
+    private struct ACTCTX
+    {
+        public int cbSize;
+        public uint dwFlags;
+        public string lpSource;
+        public ushort wProcessorArchitecture;
+        public ushort wLangId;
+        public string lpAssemblyDirectory;
+        public string lpResourceName;
+        public string lpApplicationName;
+        public IntPtr hModule;
+    }
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern IntPtr CreateActCtx(ref ACTCTX actctx);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool ActivateActCtx(IntPtr hActCtx, out IntPtr lpCookie);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool DeactivateActCtx(uint dwFlags, IntPtr ulCookie);
+
+    private IntPtr _hActCtx = IntPtr.Zero;
+    private IntPtr _cookie = IntPtr.Zero;
+
+    /// <summary>
+    /// Creates and activates an Activation Context from the given manifest path
+    /// </summary>
+    /// <param name="manifestPath"></param>
+    /// <exception cref="Exception"></exception>
+    public ActivationContext(string manifestPath)
+    {
+        var context = new ACTCTX {
+            cbSize = Marshal.SizeOf(typeof(ACTCTX)),
+            lpSource = manifestPath,
+            dwFlags = 0 // ACTCTX_FLAG_PROCESSOR_ARCHITECTURE_VALID not needed for simple path
+        };
+
+        _hActCtx = CreateActCtx(ref context);
+        if (_hActCtx == new IntPtr(-1)) 
+            throw new Exception($"Failed to create Activation Context for {manifestPath}. Error: {Marshal.GetLastWin32Error()}");
+
+        if (!ActivateActCtx(_hActCtx, out _cookie))
+            throw new Exception("Failed to activate Activation Context.");
+    }
+
+    /// <summary>
+    /// Disposes the Activation Context
+    /// </summary>
+    public void Dispose()
+    {
+        if (_cookie != IntPtr.Zero) DeactivateActCtx(0, _cookie);
     }
 }
 
@@ -193,9 +282,12 @@ public class LegacyService : ICalculator
 
 ## Phase 4: The Host (Azure Web API)
 
+A nice simple calculator interface to test calling the com object via the net48 32 bit proxy
+
 Open `AzureSandboxHost/Program.cs`.
 
 ```csharp
+using System.ComponentModel;
 using Contracts;
 using ProcessSandbox.Pool;
 using ProcessSandbox.Proxy;
@@ -217,25 +309,123 @@ var config = new ProcessPoolConfiguration
     ImplementationTypeName = "LegacyLibrary.LegacyService"
 };
 
-var loggerFactory = LoggerFactory.Create(b => b.AddConsole());
+var loggerFactory = LoggerFactory.Create(b => 
+{
+    b.AddConsole();
+    b.SetMinimumLevel(LogLevel.Debug);
+});
 
 // 2. Create the Proxy Factory
 var proxy = await ProcessProxy.CreateAsync<ICalculator>(config, loggerFactory);
 
-app.MapGet("/", async () => 
+app.MapGet("/", () => 
+{
+    var html = @"
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Native COM Calculator</title>
+        <style>
+            body { font-family: sans-serif; display: flex; justify-content: center; padding: 50px; background: #f0f2f5; }
+            .card { background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 320px; }
+            input { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+            button { width: 100%; padding: 10px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+            button:hover { background: #218838; }
+            #result-box { margin-top: 20px; padding: 15px; border-radius: 4px; background: #e9ecef; display: none; text-align: center; }
+            .result-val { font-size: 1.5rem; color: #007bff; font-weight: bold; }
+            .info { font-size: 0.75rem; color: #666; margin-top: 1.5rem; border-top: 1px solid #eee; padding-top: 10px; line-height: 1.4; }
+        </style>
+    </head>
+    <body>
+        <div class='card'>
+            <h2 style='margin-top:0'>Native COM Add</h2>
+            <form id='calcForm'>
+                <input type='number' id='x' name='x' placeholder='First Number' required />
+                <input type='number' id='y' name='y' placeholder='Second Number' required />
+                <button type='submit' id='btn'>Calculate in Sandbox</button>
+            </form>
+
+            <div id='result-box'>
+                <div style='font-size: 0.9rem; color: #444;'>Total Sum:</div>
+                <div id='sum-display' class='result-val'>0</div>
+            </div>
+
+            <div class='info'>
+                <strong>Native Library Info:</strong><br/>
+                <span id='engine-info'>Not run yet</span>
+            </div>
+        </div>
+
+        <script>
+            document.getElementById('calcForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const btn = document.getElementById('btn');
+                const box = document.getElementById('result-box');
+                const display = document.getElementById('sum-display');
+                const engineInfo = document.getElementById('engine-info');
+                
+                btn.disabled = true;
+                btn.innerText = 'Processing...';
+
+                try {
+                    const formData = new FormData(e.target);
+                    const response = await fetch('/calculate', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        display.innerText = data.result;
+                        engineInfo.innerText = data.engine;
+                        box.style.display = 'block';
+                    } else {
+                        alert('Error: ' + data.detail);
+                    }
+                } catch (err) {
+                    alert('Request failed. Check Azure logs.');
+                } finally {
+                    btn.disabled = false;
+                    btn.innerText = 'Calculate in Sandbox';
+                }
+            });
+        </script>
+    </body>
+    </html>";
+
+    return Results.Content(html, "text/html");
+});
+
+app.MapPost("/calculate", async (HttpRequest request) => 
 {
     try 
     {
-        // This will FAIL locally on Mac (because Windows workers can't start),
-        // but will SUCCEED when deployed to Azure.
-        var result = proxy.Add(50, 50);
-        var info = proxy.GetSystemInfo();
+        // Parse form values
+        var form = await request.ReadFormAsync();
 
-        return Results.Ok(new { Result = result, Info = info });
+        if(form["x"].Count == 0 || form["y"].Count == 0)
+        {
+            throw new Exception("Both 'x' and 'y' values are required.");
+        }
+
+        int x = int.Parse(form["x"]!);
+        int y = int.Parse(form["y"]!);
+
+        // Call our 32-bit Native COM object via the Sandbox Proxy
+        var sum = proxy.Add(x, y);
+        var info = proxy.GetInfo();
+
+        return Results.Ok(new { 
+            Success = true, 
+            Input = new { x, y }, 
+            Result = sum, 
+            Engine = info 
+        });
     }
     catch (Exception ex)
     {
-        return Results.Problem($"Sandbox Error: {ex.Message}");
+        return Results.Problem(ex.Message);
     }
 });
 
@@ -243,7 +433,157 @@ app.Run();
 
 ```
 
-### Phase 5: Deploy to Azure (Free Tier)
+### Phase 5: The com object 
+
+For this we create a simple c com object.
+
+Create a folder called SimpleCom
+
+Create a file called SimpleCom.c
+
+Populate it with the following code
+
+```c
+#include <initguid.h>
+#include <windows.h>
+#include <objbase.h>
+#include <stdlib.h>
+
+// CLSID: {11111111-2222-3333-4444-555555555555}
+static const GUID CLSID_SimpleCalculator = { 0x11111111, 0x2222, 0x3333, { 0x44, 0x44, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55 } };
+// IID: {E1234567-ABCD-1234-EF12-0123456789AB}
+static const GUID IID_ICalculator = { 0xE1234567, 0xABCD, 0x1234, { 0xEF, 0x12, 0x01, 0x23, 0x45, 0x67, 0x89, 0xAB } };
+
+// --- 1. COM Object (The Calculator) ---
+
+// Renamed struct to avoid collision with system headers
+typedef struct MyCalculatorVtbl {
+    HRESULT (__stdcall *QueryInterface)(void*, REFIID, void**);
+    ULONG (__stdcall *AddRef)(void*);
+    ULONG (__stdcall *Release)(void*);
+    int (__stdcall *Add)(void*, int, int);
+    BSTR (__stdcall *GetInfo)(void*);
+} MyCalculatorVtbl;
+
+typedef struct {
+    MyCalculatorVtbl* lpVtbl;
+    long count;
+} SimpleCalculator;
+
+HRESULT __stdcall QueryInterface(void* this, REFIID riid, void** ppv) {
+    if (IsEqualGUID(riid, &IID_IUnknown) || IsEqualGUID(riid, &IID_ICalculator)) {
+        *ppv = this;
+        ((IUnknown*)this)->lpVtbl->AddRef(this);
+        return S_OK;
+    }
+    *ppv = NULL;
+    return E_NOINTERFACE;
+}
+
+ULONG __stdcall AddRef(void* this) {
+    return InterlockedIncrement(&((SimpleCalculator*)this)->count);
+}
+
+ULONG __stdcall Release(void* this) {
+    ULONG count = InterlockedDecrement(&((SimpleCalculator*)this)->count);
+    if (count == 0) free(this);
+    return count;
+}
+
+int __stdcall Add(void* this, int a, int b) {
+    return a + b;
+}
+
+BSTR __stdcall GetInfo(void* this) {
+    return SysAllocString(L"Running the native C COM object");
+}
+
+static MyCalculatorVtbl CalculatorVtbl = { QueryInterface, AddRef, Release, Add, GetInfo };
+
+// --- 2. Class Factory ---
+
+// Renamed struct to avoid collision with system headers
+typedef struct MyClassFactoryVtbl {
+    HRESULT (__stdcall *QueryInterface)(void*, REFIID, void**);
+    ULONG (__stdcall *AddRef)(void*);
+    ULONG (__stdcall *Release)(void*);
+    HRESULT (__stdcall *CreateInstance)(void*, IUnknown*, REFIID, void**);
+    HRESULT (__stdcall *LockServer)(void*, BOOL);
+} MyClassFactoryVtbl;
+
+typedef struct {
+    MyClassFactoryVtbl* lpVtbl;
+} SimpleClassFactoryStruct;
+
+HRESULT __stdcall Factory_QueryInterface(void* this, REFIID riid, void** ppv) {
+    if (IsEqualGUID(riid, &IID_IUnknown) || IsEqualGUID(riid, &IID_IClassFactory)) {
+        *ppv = this;
+        return S_OK;
+    }
+    *ppv = NULL;
+    return E_NOINTERFACE;
+}
+
+ULONG __stdcall Factory_AddRef(void* this) { return 2; }
+ULONG __stdcall Factory_Release(void* this) { return 1; }
+
+HRESULT __stdcall Factory_CreateInstance(void* this, IUnknown* pUnkOuter, REFIID riid, void** ppv) {
+    if (pUnkOuter != NULL) return CLASS_E_NOAGGREGATION;
+
+    SimpleCalculator* obj = (SimpleCalculator*)malloc(sizeof(SimpleCalculator));
+    if (!obj) return E_OUTOFMEMORY;
+    
+    obj->lpVtbl = &CalculatorVtbl;
+    obj->count = 1;
+
+    HRESULT hr = obj->lpVtbl->QueryInterface(obj, riid, ppv);
+    obj->lpVtbl->Release(obj); 
+    return hr;
+}
+
+HRESULT __stdcall Factory_LockServer(void* this, BOOL fLock) { return S_OK; }
+
+static MyClassFactoryVtbl ClassFactoryVtbl = { 
+    Factory_QueryInterface, Factory_AddRef, Factory_Release, 
+    Factory_CreateInstance, Factory_LockServer 
+};
+
+static SimpleClassFactoryStruct SimpleClassFactory = { &ClassFactoryVtbl };
+
+// --- 3. DLL Exports ---
+
+HRESULT __stdcall DllGetClassObject(REFCLSID rclsid, REFIID riid, LPVOID* ppv) {
+    if (IsEqualGUID(rclsid, &CLSID_SimpleCalculator)) {
+        return SimpleClassFactory.lpVtbl->QueryInterface(&SimpleClassFactory, riid, ppv);
+    }
+    return CLASS_E_CLASSNOTAVAILABLE;
+}
+
+HRESULT __stdcall DllCanUnloadNow() { return S_FALSE; }
+BOOL WINAPI DllMain(HINSTANCE hinst, DWORD reason, LPVOID reserved) { return TRUE; }
+
+```
+
+To build the executable completely stand alone you need a c compliler.
+
+On a mac you can do this:
+
+```bash
+brew install mingw-w64
+```
+
+And then to build you need to the following. Pay close attention to the flags, you require these to make it completely stand alond and have the right entry points. Com is fiddly!
+
+
+Also note here we are pushing it to a publish folder. When you deploy your zip file to azure you will need the SimpleCom.dll in there.
+
+
+```bash
+i686-w64-mingw32-gcc -shared -static -o publish/workers/net48/win-x86/SimpleCom.dll SimpleCom/SimpleCom.c -lole32 -loleaut32 -Wl,--add-stdcall-alias
+```
+
+
+### Phase 6: Deploy to Azure (Free Tier)
 
 Now for the payoff. We will push this Mac-built code to a Windows server.
 
@@ -281,6 +621,12 @@ dotnet clean
 dotnet publish AzureSandboxHost/AzureSandboxHost.csproj -c Release -o ./publish
 ```
 
+Add you com object into the win-x86 folder so it can be loaded by the LegacyLibrary service
+
+```bash
+i686-w64-mingw32-gcc -shared -static -o publish/workers/net48/win-x86/SimpleCom.dll SimpleCom/SimpleCom.c -lole32 -loleaut32 -Wl,--add-stdcall-alias
+```
+
 Zip the output - you need to zip the contents of the publish folder, not the folder itself
 
 ```bash
@@ -311,12 +657,6 @@ az webapp config set \
 
 If you run `dotnet run` locally on your Mac, it will crash when you hit the endpoint because `ProcessSandbox` cannot find `ProcessSandbox.Worker.exe` (it doesn't exist on macOS).
 
-However, navigate to your Azure URL (`https://my-unique-sandbox-app.azurewebsites.net`):
+However, navigate to your Azure URL (`https://my-unique-sandbox-app.azurewebsites.net`) and you will see a calculator
 
-```json
-{
-  "result": 100,
-  "info": "OS: Microsoft Windows NT 10.0.14393.0 | 64Bit: False | Ver: 4.8.4645.0"
-}
-
-```
+There is a [live demo here](https://com-sandbox-demo-app.azurewebsites.net)
