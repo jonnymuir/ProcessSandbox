@@ -18,7 +18,7 @@ You have legacy code that:
 
 ## Jump straight to the live demo
 
-<a href="https://com-sandbox-demo-app.azurewebsites.net" target="_blank">live demo</a>
+<a href="https://com-sandbox-demo-app.azurewebsites.net" target="_blank" rel="noopener noreferrer">live demo</a>
 
 ![Calculator showing it running via the C Com Object](image-1.png)
 
