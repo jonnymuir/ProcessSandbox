@@ -5,12 +5,6 @@
 
 Process isolation library for .NET that protects your application from legacy, unmanaged, or problematic code by running it in separate sandboxed processes.
 
-## Jump straight to the live demo
-
-[live demo here](https://com-sandbox-demo-app.azurewebsites.net)
-
-![Calculator showing it running via the C Com Object](image-1.png)
-
 ## The Problem
 
 You have legacy code that:
@@ -21,6 +15,12 @@ You have legacy code that:
 - You can't easily modify or replace
 
 **ProcessSandbox solves this** by running the problematic code in isolated worker processes with automatic resource monitoring, lifecycle management, and transparent proxying.
+
+## Jump straight to the live demo
+
+<a href="https://com-sandbox-demo-app.azurewebsites.net" target="_blank">live demo - opens in a new window</a>
+
+![Calculator showing it running via the C Com Object](image-1.png)
 
 ## Features
 
@@ -186,6 +186,7 @@ MIT License - see [LICENSE](./LICENSE) for details.
 
 ## Roadmap
 
+- [ ] Call com objects directly just via an interface contract. No need for the manifest or an intermediate c# wrapper. This would need to use the COM Binary Interface (the VTable) but skip the COM Infrastructure (the Registry and the Service Control Manager).
 - [ ] Circuit breaker pattern
 - [ ] Dynamic pool scaling
 - [ ] Telemetry/metrics export
