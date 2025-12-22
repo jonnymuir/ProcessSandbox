@@ -6,7 +6,7 @@ uses
   Windows, 
   ComObj, 
   ActiveX, 
-  ComServ;
+  ComServ; // This unit implements DllGetClassObject
 
 const
   CLSID_SimpleCalculator: TGUID = '{11111111-2222-3333-4444-555555555555}';
@@ -24,7 +24,7 @@ type
     function GetInfo: WideString; stdcall;
   end;
 
-{ TSimpleCalculator Implementation }
+{ TSimpleCalculator }
 
 function TSimpleCalculator.Add(a, b: Integer): Integer; stdcall;
 begin
@@ -36,16 +36,16 @@ begin
   Result := 'Running the native Delphi (FPC) COM object';
 end;
 
-// 3. Factory Registration
-initialization
-  // We provide all 7 arguments explicitly to match the FPC declaration exactly:
-  // 1: ComServer
-  // 2: The Class
-  // 3: The CLSID
-  // 4: Class Name
-  // 5: Description
-  // 6: Instancing (TClassInstancing)
-  // 7: ThreadingModel (TThreadingModel)
+// These are the 4 standard COM entry points. 
+// ComServ provides the implementation for these.
+exports
+  DllGetClassObject,
+  DllCanUnloadNow,
+  DllRegisterServer,
+  DllUnregisterServer;
+
+begin
+  // Create the factory inside the begin-end block or initialization
   TComObjectFactory.Create(
     ComServer, 
     TSimpleCalculator, 
