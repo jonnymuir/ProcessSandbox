@@ -14,9 +14,10 @@ namespace ProcessSandbox.Worker;
 /// Creates a new method invoker for the specified target instance.
 /// </remarks>
 /// <param name="targetInstance"></param>
+/// <param name="targetType"></param>
 /// <param name="logger"></param>
 /// <exception cref="ArgumentNullException"></exception>
-public class MethodInvoker(object targetInstance, ILogger<MethodInvoker> logger)
+public class MethodInvoker(object targetInstance, Type targetType, ILogger<MethodInvoker> logger)
 {
     /// <summary>
     /// Invokes a method based on the invocation message.
@@ -79,12 +80,12 @@ public class MethodInvoker(object targetInstance, ILogger<MethodInvoker> logger)
         const BindingFlags flags = BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase;
 
         // Try exact match first
-        var method = targetInstance.GetType().GetMethod(methodName, flags, null, parameterTypes, null);
+        var method = targetType.GetMethod(methodName, flags, null, parameterTypes, null);
         if (method != null)
             return method;
 
         // Try to find by name and parameter count (handles covariance/contravariance)
-        var methods = targetInstance.GetType().GetMethods(flags)
+        var methods = targetType.GetMethods(flags)
             .Where(m => string.Equals(m.Name, methodName, StringComparison.OrdinalIgnoreCase))
             .Where(m => m.GetParameters().Length == parameterTypes.Length)
             .ToArray();

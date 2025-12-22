@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -31,43 +32,90 @@ public class WorkerHost(WorkerConfiguration config, ILoggerFactory loggerFactory
     /// </summary>
     public async Task RunAsync()
     {
-        if (_disposed)
-            throw new ObjectDisposedException(nameof(WorkerHost));
-
+        if (_disposed) throw new ObjectDisposedException(nameof(WorkerHost));
         _logger.LogInformation("Worker host starting...");
 
         try
         {
-            // Load assembly and create instance
-            _logger.LogInformation("Loading target assembly...");
-            var loader = new AssemblyLoader(loggerFactory.CreateLogger<AssemblyLoader>());
-            var targetInstance = loader.LoadAndCreateInstance(
-                config.AssemblyPath,
-                config.TypeName);
+            object targetInstance;
+            Type targetType;
 
-            _logger.LogInformation("Target instance created: {Type}", targetInstance.GetType().FullName);
+            // ---------------------------------------------------------
+            // 1. DETERMINISTIC LOADING STRATEGY
+            // ---------------------------------------------------------
+            
+            // Check if this is a Native COM activation request
+            // We can detect this if a CLSID is provided in config, OR by checking the file header.
+            // Here we use a Try/Catch approach on AssemblyName.GetAssemblyName for robustness.
+            bool isManagedAssembly = true;
+            try
+            {
+                AssemblyName.GetAssemblyName(config.AssemblyPath);
+            }
+            catch (BadImageFormatException)
+            {
+                isManagedAssembly = false;
+            }
 
-            // Create method invoker
+            if (isManagedAssembly)
+            {
+                // -- STRATEGY A: MANAGED ASSEMBLY --
+                _logger.LogInformation("Detected Managed Assembly. Loading via Reflection...");
+                var loader = new AssemblyLoader(loggerFactory.CreateLogger<AssemblyLoader>());
+                targetInstance = loader.LoadAndCreateInstance(config.AssemblyPath, config.TypeName);
+                targetType = targetInstance.GetType();
+            }
+            else
+            {
+                // -- STRATEGY B: NATIVE DIRECT COM --
+                _logger.LogInformation("Detected Native DLL. Attempting Direct COM Load...");
+                
+                Guid clsid;
+
+                if (config.ComClsid != Guid.Empty)
+                {
+                    clsid = config.ComClsid;
+                }
+                else
+                {
+                    throw new ArgumentException("Native COM loading requires a CLSID. Pass it in config or append to TypeName (Type|GUID).");
+                }
+
+                // We need to load the assembly containing the Interface definition (e.g. Contracts.dll)
+                // Assuming Contracts.dll is in the same folder as the worker
+                targetType = Type.GetType(config.TypeName) 
+                             ?? throw new Exception($"Could not find Interface Type '{config.TypeName}'. Ensure Contracts.dll is referenced.");
+
+                targetInstance = NativeComLoader.CreateInstance(config.AssemblyPath, clsid, targetType);
+            }
+
+            _logger.LogInformation("Target instance created. Type: {Type}", targetType.FullName);
+
+            // ---------------------------------------------------------
+            // 2. SETUP METHOD INVOKER
+            // ---------------------------------------------------------
+            
+            // Important: We must pass 'targetType' explicitly. 
+            // If targetInstance is a COM object, GetType() returns System.__ComObject, which breaks Reflection.
+            // You might need to add a constructor to MethodInvoker that accepts the Type explicitly.
             _methodInvoker = new MethodInvoker(
                 targetInstance,
+                targetType, 
                 loggerFactory.CreateLogger<MethodInvoker>());
 
-            // Create and connect IPC channel
+            // ---------------------------------------------------------
+            // 3. START IPC
+            // ---------------------------------------------------------
             _logger.LogInformation("Connecting to pipe: {PipeName}", config.PipeName);
             _channel = new NamedPipeServerChannel(config.PipeName);
-            
-            // Subscribe to disconnection events
             _channel.Disconnected += OnChannelDisconnected;
 
-            // Send the ready signal after the server is listening
             _logger.LogInformation("Pipe server ready. Sending READY signal.");
-            Console.WriteLine("PROCESS_SANDBOX_WORKER_READY"); // <-- Worker must output this exact string
+            Console.WriteLine("PROCESS_SANDBOX_WORKER_READY");
 
-            // Wait for client connection
             await _channel.WaitForConnectionAsync(_shutdownCts.Token).ConfigureAwait(false);
             _logger.LogInformation("Client connected");
 
-            // Process messages until shutdown
             await MessageProcessingLoop().ConfigureAwait(false);
         }
         catch (OperationCanceledException)

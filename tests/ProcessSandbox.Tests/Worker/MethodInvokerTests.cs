@@ -26,7 +26,7 @@ public class MethodInvokerTests
     {
         // Arrange
         var target = new TestServiceImpl();
-        var invoker = new ProcessSandbox.Worker.MethodInvoker(target, NullLogger<ProcessSandbox.Worker.MethodInvoker>.Instance);
+        var invoker = new ProcessSandbox.Worker.MethodInvoker(target, target.GetType(), NullLogger<ProcessSandbox.Worker.MethodInvoker>.Instance);
 
         var invocation = new MethodInvocationMessage(Guid.NewGuid(), "Echo", 5000)
         {
@@ -53,7 +53,7 @@ public class MethodInvokerTests
     {
         // Arrange
         var target = new TestServiceImpl();
-        var invoker = new ProcessSandbox.Worker.MethodInvoker(target, NullLogger<ProcessSandbox.Worker.MethodInvoker>.Instance);
+        var invoker = new ProcessSandbox.Worker.MethodInvoker(target, target.GetType(), NullLogger<ProcessSandbox.Worker.MethodInvoker>.Instance);
 
         var invocation = new MethodInvocationMessage(Guid.NewGuid(), "DoNothing", 5000)
         {
@@ -77,7 +77,7 @@ public class MethodInvokerTests
     {
         // Arrange
         var target = new TestServiceImpl();
-        var invoker = new ProcessSandbox.Worker.MethodInvoker(target, NullLogger<ProcessSandbox.Worker.MethodInvoker>.Instance);
+        var invoker = new ProcessSandbox.Worker.MethodInvoker(target, target.GetType(), NullLogger<ProcessSandbox.Worker.MethodInvoker>.Instance);
 
         var invocation = new MethodInvocationMessage(Guid.NewGuid(), "Add", 5000)
         {
@@ -110,7 +110,7 @@ public class MethodInvokerTests
     {
         // Arrange
         var target = new ThrowingServiceImpl();
-        var invoker = new ProcessSandbox.Worker.MethodInvoker(target, NullLogger<ProcessSandbox.Worker.MethodInvoker>.Instance);
+        var invoker = new ProcessSandbox.Worker.MethodInvoker(target, target.GetType(), NullLogger<ProcessSandbox.Worker.MethodInvoker>.Instance);
 
         var invocation = new MethodInvocationMessage(Guid.NewGuid(), "Echo", 5000)
         {
@@ -135,7 +135,7 @@ public class MethodInvokerTests
     {
         // Arrange
         var target = new TestServiceImpl();
-        var invoker = new ProcessSandbox.Worker.MethodInvoker(target, NullLogger<ProcessSandbox.Worker.MethodInvoker>.Instance);
+        var invoker = new ProcessSandbox.Worker.MethodInvoker(target, target.GetType(), NullLogger<ProcessSandbox.Worker.MethodInvoker>.Instance);
 
         var invocation = new MethodInvocationMessage(Guid.NewGuid(), "NonExistentMethod", 5000)
         {
@@ -159,7 +159,7 @@ public class MethodInvokerTests
     {
         // Arrange
         var target = new TestServiceImpl();
-        var invoker = new ProcessSandbox.Worker.MethodInvoker(target, NullLogger<ProcessSandbox.Worker.MethodInvoker>.Instance);
+        var invoker = new ProcessSandbox.Worker.MethodInvoker(target, target.GetType(), NullLogger<ProcessSandbox.Worker.MethodInvoker>.Instance);
 
         var inputBytes = new byte[] { 1, 2, 3, 4, 5 };
         var invocation = new MethodInvocationMessage(Guid.NewGuid(), "ProcessBytes", 5000)

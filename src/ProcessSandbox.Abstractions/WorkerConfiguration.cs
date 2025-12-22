@@ -37,6 +37,12 @@ public class WorkerConfiguration
     /// </summary>
     [Key(4)]
     public int ParentProcessId { get; set; }
+    
+    /// <summary>
+    /// COM CLSID of the native COM object to load (if applicable).
+    /// </summary>
+    [Key(5)]
+    public Guid ComClsid { get; set; }
 
     /// <summary>
     /// Validates the configuration.
