@@ -45,7 +45,7 @@ var html = @"
                 max-width: 400px;
                 box-sizing: border-box; 
             }            
-            input, select { height: 2rem; width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+            input, select { height: 2.5rem; width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
             label { font-size: 0.8rem; font-weight: bold; color: #555; }
             button { width: 100%; padding: 10px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; margin-top: 10px;}
             button:hover { background: #0056b3; }
