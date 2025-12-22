@@ -250,3 +250,5 @@ zip -r ../site.zip *
 cd ..
 az webapp deployment source config-zip --resource-group jonnymoo_rg_9172 --name com-sandbox-demo-app --src site.zip
 ```
+
+Remember if you want to deploy SimpleComDelphi.dll - you can get it from the artifacts on the github build. You will have to manually go put it onto azure in site/wwwroot/workers/net48/win-x86

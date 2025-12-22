@@ -68,7 +68,7 @@ public static class ProcessProxy
 
         loggerFactory ??= NullLoggerFactory.Instance;
 
-        if(configuration.ImplementationTypeName == null)
+        if(string.IsNullOrEmpty(configuration.ImplementationTypeName))
         {
             configuration.ImplementationTypeName = typeof(TInterface).FullName!;
         }
