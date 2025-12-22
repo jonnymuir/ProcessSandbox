@@ -33,9 +33,18 @@ var html = @"
     <html>
     <head>
         <title>Native COM Sandbox</title>
+        <meta name='viewport' content='width=device-width, initial-scale=1.0'>
         <style>
             body { font-family: sans-serif; display: flex; justify-content: center; padding: 50px; background: #f0f2f5; }
-            .card { background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 350px; }
+            .card { 
+                background: white; 
+                padding: 2rem; 
+                border-radius: 8px; 
+                box-shadow: 0 4px 6px rgba(0,0,0,0.1); 
+                width: 90%;
+                max-width: 400px;
+                box-sizing: border-box; 
+            }            
             input, select { height: 30px; width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
             label { font-size: 0.8rem; font-weight: bold; color: #555; }
             button { width: 100%; padding: 10px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; margin-top: 10px;}
