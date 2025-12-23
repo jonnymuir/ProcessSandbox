@@ -56,7 +56,7 @@ public class LeakyTests : IDisposable
             MaxGdiHandles = 5000,
             ProcessRecycleThreshold = 0,
             VerboseWorkerLogging = false,
-            RecycleAfterCalls = 10
+            RecycleCheckCalls = 10
 
         };
 
@@ -94,7 +94,7 @@ public class LeakyTests : IDisposable
             MaxGdiHandles = 5000,
             ProcessRecycleThreshold = 0,
             VerboseWorkerLogging = false,
-            RecycleAfterCalls = 10
+            RecycleCheckCalls = 10
 
         };
 

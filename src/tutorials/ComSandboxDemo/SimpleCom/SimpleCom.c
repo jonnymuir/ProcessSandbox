@@ -10,7 +10,6 @@ static const GUID IID_ICalculator = { 0xE1234567, 0xABCD, 0x1234, { 0xEF, 0x12, 
 
 // --- 1. COM Object (The Calculator) ---
 
-// Renamed struct to avoid collision with system headers
 typedef struct MyCalculatorVtbl {
     HRESULT (__stdcall *QueryInterface)(void*, REFIID, void**);
     ULONG (__stdcall *AddRef)(void*);
@@ -56,7 +55,6 @@ static MyCalculatorVtbl CalculatorVtbl = { QueryInterface, AddRef, Release, Add,
 
 // --- 2. Class Factory ---
 
-// Renamed struct to avoid collision with system headers
 typedef struct MyClassFactoryVtbl {
     HRESULT (__stdcall *QueryInterface)(void*, REFIID, void**);
     ULONG (__stdcall *AddRef)(void*);

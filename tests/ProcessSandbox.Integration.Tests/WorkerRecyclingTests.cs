@@ -72,7 +72,7 @@ public class WorkerRecyclingTests
             ImplementationAssemblyPath = _testAssemblyPath,
             ImplementationTypeName = typeof(StatefulServiceImpl).FullName!,
             ProcessRecycleThreshold = 3,
-            RecycleAfterCalls = 1
+            RecycleCheckCalls = 1
         };
 
         var proxy = await ProcessProxy.CreateAsync<ITestService>(config, _loggerFactory);

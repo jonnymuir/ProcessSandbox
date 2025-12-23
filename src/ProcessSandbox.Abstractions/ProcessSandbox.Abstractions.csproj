@@ -10,7 +10,7 @@
     <PackageReference Include="MessagePack" Version="$(MessagePackVersion)" />
     <PackageReference Include="MessagePack.Annotations" Version="$(MessagePackVersion)" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="$(MicrosoftExtensionsLoggingVersion)" />
-
+    <None Include="../../README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
 </Project>

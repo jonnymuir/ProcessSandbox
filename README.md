@@ -207,7 +207,7 @@ Then to build all the packages and put them in the local feed you can do the fol
 dotnet build --configuration Release
 dotnet build src/ProcessSandbox.Worker/ProcessSandbox.Worker.csproj -c Release -f net48 -r win-x86
 dotnet pack /p:ExcludeProjects="**/ProcessSandbox.Worker.csproj" --configuration Release --no-build --output push-ready-artifacts
-dotnet pack src/ProcessSandbox.Worker/ProcessSandbox.Worker.nuspec --configuration Release --output push-ready-artifacts
+dotnet pack src/ProcessSandbox.Worker/ProcessSandbox.Worker.nuspec --configuration Release --output push-ready-artifacts -p:NoWarn=NU5100
 cp push-ready-artifacts/* ~/LocalNuGetFeed
 ```
 

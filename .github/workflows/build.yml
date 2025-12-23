@@ -88,7 +88,7 @@ jobs:
       run: dotnet pack /p:ExcludeProjects="**/ProcessSandbox.Worker.csproj" --configuration Release --no-build --output ${{ github.workspace }}\artifacts
   
     - name: Pack Worker (Manual Nuspec)
-      run: dotnet pack src/ProcessSandbox.Worker/ProcessSandbox.Worker.nuspec --configuration Release --output ${{ github.workspace }}\artifacts
+      run: dotnet pack src/ProcessSandbox.Worker/ProcessSandbox.Worker.nuspec --configuration Release --output ${{ github.workspace }}\artifacts -p:NoWarn=NU5100
 
     - name: Push to NuGet.org
       if: (github.ref == 'refs/heads/main') 

@@ -15,11 +15,11 @@
     <RepositoryUrl>https://github.com/jonnymuir/ProcessSandbox.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageTags>process;isolation;sandbox;interop;com;native;unmanaged;proxy</PackageTags>
-    <!--<PackageReadmeFile>README.md</PackageReadmeFile>-->
+    <PackageReadmeFile>README.md</PackageReadmeFile>
     <!--<PackageIcon>icon.png</PackageIcon>-->
     
     <!-- Version -->
-    <VersionPrefix>0.20.0</VersionPrefix>
+    <VersionPrefix>1.0.1</VersionPrefix>
     <VersionSuffix Condition="'$(Configuration)' == 'Debug'">dev</VersionSuffix>
     
     <!-- SourceLink -->

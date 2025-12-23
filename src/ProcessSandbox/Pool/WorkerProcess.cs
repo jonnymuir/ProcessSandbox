@@ -28,6 +28,7 @@ public class WorkerProcess(ProcessPoolConfiguration config, ILogger<WorkerProces
     private int _callCount;
     private bool _disposed;
     private int _recycleCount = 0;
+    private DateTime _lastCheckTime = DateTime.UtcNow;
     private readonly SemaphoreSlim _usageLock = new SemaphoreSlim(1, 1);
 
     private TaskCompletionSource<bool> _workerReadyTcs = null!;
@@ -306,12 +307,15 @@ public class WorkerProcess(ProcessPoolConfiguration config, ILogger<WorkerProces
     public bool ShouldRecycle()
     {
         _recycleCount++;
-        if (_recycleCount < config.RecycleAfterCalls)
+        var timeSinceLastCheck = DateTime.UtcNow - _lastCheckTime;
+
+        if (_recycleCount < config.RecycleCheckCalls && timeSinceLastCheck < TimeSpan.FromSeconds(config.RecycleCheckSeconds))
         {
             return false;
         }
 
         _recycleCount = 0;
+        _lastCheckTime = DateTime.UtcNow;
         
         logger.LogDebug("Checking if worker {WorkerId} should recycle", _workerId);
 
@@ -514,6 +518,10 @@ public class WorkerProcess(ProcessPoolConfiguration config, ILogger<WorkerProces
         if (_process != null)
         {
             _process.Exited -= OnProcessExited;
+
+            try { _process.CancelOutputRead(); } catch { }
+            try { _process.CancelErrorRead(); } catch { }
+            
             _process.Dispose();
             _process = null;
         }
