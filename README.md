@@ -1,7 +1,7 @@
 # ProcessSandbox
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![.NET](https://img.shields.io/badge/.NET-10.0%20%7C%204.8-512BD4)](https://dotnet.microsoft.com/)
+[![.NET](https://img.shields.io/badge/.NET-10.0%20%7C%208.0%20%7C%204.8-512BD4)](https://dotnet.microsoft.com/)
 
 Process isolation library for .NET that protects your application from legacy, unmanaged, or problematic code by running it in separate sandboxed processes.
 
