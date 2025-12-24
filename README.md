@@ -233,7 +233,7 @@ brew install mingw-w64
 
 And then to build you need to
 ```bash
-i686-w64-mingw32-gcc -shared -static -o publish/workers/net48/win-x86/SimpleCom.dll SimpleCom/SimpleCom.c -lole32 -loleaut32 -Wl,--add-stdcall-alias
+i686-w64-mingw32-gcc -shared -static -o publish/workers/net48/win-x86/SimpleCom.dll SimpleCom/SimpleCom.c -lole32 -loleaut32 -lpsapi -Wl,--add-stdcall-alias
 ```
 
 Replace jonnymoo_rg_9172 with the name of your resource group and com-sandbox-demo-app with the name of you web app (from src/tutorials/ComSandboxDemo)
@@ -244,7 +244,7 @@ rm -rf publish
 rm site.zip
 dotnet nuget locals all --clear
 dotnet publish AzureSandboxHost/AzureSandboxHost.csproj -c Release -o ./publish
-i686-w64-mingw32-gcc -shared -static -o publish/workers/net48/win-x86/SimpleCom.dll SimpleCom/SimpleCom.c -lole32 -loleaut32 -Wl,--add-stdcall-alias
+i686-w64-mingw32-gcc -shared -static -o publish/workers/net48/win-x86/SimpleCom.dll SimpleCom/SimpleCom.c -lole32 -loleaut32 -lpsapi -Wl,--add-stdcall-alias
 cd publish
 zip -r ../site.zip *
 cd ..

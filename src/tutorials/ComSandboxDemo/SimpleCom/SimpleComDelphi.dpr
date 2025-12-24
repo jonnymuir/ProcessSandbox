@@ -3,7 +3,7 @@ library SimpleComDelphi;
 {$MODE DELPHI}
 
 uses
-  Windows, ActiveX, ComObj;
+  Windows, ActiveX, ComObj, SysUtils, PsAPI;
 
 const
   CLSID_SimpleCalculator: TGUID = '{11111111-2222-3333-4444-555555555555}';
@@ -32,18 +32,42 @@ type
 
 { TSimpleCalculator }
 
-function TSimpleCalculator.Add(a, b: Integer): Integer; stdcall;
-begin
-  Result := a + b;
-end;
-
 function TSimpleCalculator.GetInfo: TBSTR; stdcall;
 var
   S: WideString;
+  PID: DWORD;
+  PMC: TProcessMemoryCounters;
+  HandleCount: DWORD;
+  GdiHandles, UserHandles: Integer;
+  WorkingSet: UInt64;
 begin
-  S := 'Running the manual Delphi FPC COM object';
-  // Use SysAllocString instead of SysAllocStringLen
-  // PWideChar(S) points to the start of the WideString data
+  // 1. Collect Stats
+  PID := GetCurrentProcessID;
+  
+  WorkingSet := 0;
+  if GetProcessMemoryInfo(GetCurrentProcess, @PMC, SizeOf(PMC)) then
+    WorkingSet := PMC.WorkingSetSize;
+
+  GetProcessHandleCount(GetCurrentProcess, @HandleCount);
+  GdiHandles := GetGuiResources(GetCurrentProcess, 0);
+  UserHandles := GetGuiResources(GetCurrentProcess, 1);
+
+  // 2. Format as JSON string
+  // Using WideFormat to ensure we handle the WideString properly for the BSTR
+  S := WideFormat(
+    '{' +
+    '"engine": "Running the manual Delphi FPC COM object",' +
+    '"pid": %d,' +
+    '"memoryBytes": %d,' +
+    '"handles": {' +
+      '"total": %d,' +
+      '"gdi": %d,' +
+      '"user": %d' +
+    '}' +
+    '}',
+    [PID, WorkingSet, HandleCount, GdiHandles, UserHandles]
+  );
+
   Result := SysAllocString(PWideChar(S));
 end;
 

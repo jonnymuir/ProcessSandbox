@@ -1,7 +1,12 @@
+#define _UNICODE
+#define UNICODE
+#define __USE_MINGW_ANSI_STDIO 1
+#include <stdio.h>
 #include <initguid.h>
 #include <windows.h>
 #include <objbase.h>
 #include <stdlib.h>
+#include <psapi.h>
 
 // CLSID: {11111111-2222-3333-4444-555555555555}
 static const GUID CLSID_SimpleCalculator = { 0x11111111, 0x2222, 0x3333, { 0x44, 0x44, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55 } };
@@ -47,8 +52,50 @@ int __stdcall Add(void* this, int a, int b) {
     return a + b;
 }
 
+// Helper to get GDI/User handles
+int GetInternalGuiResources(int type) {
+    return GetGuiResources(GetCurrentProcess(), type);
+}
+
 BSTR __stdcall GetInfo(void* this) {
-    return SysAllocString(L"Running the native C COM object");
+// 1. Get Process ID
+    DWORD pid = GetCurrentProcessId();
+
+    // 2. Get Memory Stats
+    PROCESS_MEMORY_COUNTERS pmc;
+    SIZE_T workingSet = 0;
+    if (GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc))) {
+        workingSet = pmc.WorkingSetSize;
+    }
+
+    // 3. Get Handle Counts
+    DWORD handleCount = 0;
+    GetProcessHandleCount(GetCurrentProcess(), &handleCount);
+    int gdiHandles = GetInternalGuiResources(0);
+    int userHandles = GetInternalGuiResources(1);
+
+    // 4. Construct JSON String (Wide Char for BSTR)
+    wchar_t buffer[1024];
+    // With __USE_MINGW_ANSI_STDIO 1, swprintf follows the modern 3-argument signature
+    swprintf(buffer, 1024,
+        L"{"
+        L"\"engine\": \"Running the native C COM object\","
+        L"\"pid\": %u,"
+        L"\"memoryBytes\": %u,"
+        L"\"handles\": {"
+            L"\"total\": %u,"
+            L"\"gdi\": %d,"
+            L"\"user\": %d"
+        L"}"
+        L"}",
+        (unsigned int)pid, 
+        (unsigned int)workingSet, 
+        (unsigned int)handleCount, 
+        gdiHandles, 
+        userHandles
+    );
+
+    return SysAllocString(buffer);
 }
 
 static MyCalculatorVtbl CalculatorVtbl = { QueryInterface, AddRef, Release, Add, GetInfo };
