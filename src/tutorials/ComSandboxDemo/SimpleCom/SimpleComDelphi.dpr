@@ -3,7 +3,25 @@ library SimpleComDelphi;
 {$MODE DELPHI}
 
 uses
-  Windows, ActiveX, ComObj, SysUtils, PsAPI;
+  Windows, ActiveX, ComObj, SysUtils;
+
+type
+  // Manually define the record since we aren't using the PsAPI unit
+  TProcessMemoryCounters = record
+    cb: DWORD;
+    PageFaultCount: DWORD;
+    PeakWorkingSetSize: SIZE_T;
+    WorkingSetSize: SIZE_T;
+    QuotaPeakPagedPoolUsage: SIZE_T;
+    QuotaPagedPoolUsage: SIZE_T;
+    QuotaPeakNonPagedPoolUsage: SIZE_T;
+    QuotaNonPagedPoolUsage: SIZE_T;
+    PagefileUsage: SIZE_T;
+    PeakPagefileUsage: SIZE_T;
+  end;
+
+// Manually import the function from psapi.dll
+function GetProcessMemoryInfo(Process: HANDLE; ppsmemCounters: Pointer; cb: DWORD): BOOL; stdcall; external 'psapi.dll';
 
 const
   CLSID_SimpleCalculator: TGUID = '{11111111-2222-3333-4444-555555555555}';
