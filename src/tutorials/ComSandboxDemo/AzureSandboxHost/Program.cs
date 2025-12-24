@@ -6,190 +6,282 @@ using System.Text.Json;
 var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
 
-var loggerFactory = LoggerFactory.Create(b => {
+var loggerFactory = LoggerFactory.Create(b =>
+{
     b.AddConsole();
     b.SetMinimumLevel(LogLevel.Debug);
 });
 
-// Setup Proxies
-var configBase = new ProcessPoolConfiguration {
+// Setup C Engine Configuration (Explicitly creating separate objects for .NET 4.8 compatibility)
+var poolConfigC = new ProcessPoolConfiguration
+{
     DotNetVersion = DotNetVersion.Net48_32Bit,
-    ComClsid = new Guid("11111111-2222-3333-4444-555555555555")
+    ComClsid = new Guid("11111111-2222-3333-4444-555555555555"),
+    MaxMemoryMB = 1024,
+    ProcessRecycleThreshold = 20, // Small threshold to see recycling in action
+    ImplementationAssemblyPath = Path.Combine(AppContext.BaseDirectory, "workers", "net48", "win-x86", "SimpleCom.dll")
 };
 
-var proxyC = await ProcessProxy.CreateAsync<ICalculator>(configBase with {
-    ImplementationAssemblyPath = Path.Combine(AppContext.BaseDirectory, "workers", "net48", "win-x86", "SimpleCom.dll")
-}, loggerFactory);
-
-var proxyDelphi = await ProcessProxy.CreateAsync<ICalculator>(configBase with {
+// Setup Delphi Engine Configuration
+var poolConfigDelphi = new ProcessPoolConfiguration
+{
+    DotNetVersion = DotNetVersion.Net48_32Bit,
+    ComClsid = new Guid("11111111-2222-3333-4444-555555555555"),
+    MaxMemoryMB = 1024,
+    ProcessRecycleThreshold = 20,
     ImplementationAssemblyPath = Path.Combine(AppContext.BaseDirectory, "workers", "net48", "win-x86", "SimpleComDelphi.dll")
-}, loggerFactory);
+};
 
-app.MapGet("/", () => {
+var proxyC = await ProcessProxy.CreateAsync<ICalculator>(poolConfigC, loggerFactory);
+var proxyDelphi = await ProcessProxy.CreateAsync<ICalculator>(poolConfigDelphi, loggerFactory);
+
+app.MapGet("/", () =>
+{
     var html = @"
     <!DOCTYPE html>
     <html>
     <head>
         <title>COM Sandbox Dashboard</title>
         <style>
-            body { font-family: 'Segoe UI', sans-serif; background: #f4f7f9; padding: 20px; display: flex; gap: 20px; }
-            .panel { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-            .controls { width: 300px; }
-            .dashboard { flex-grow: 1; }
-            input, select, button { width: 100%; padding: 10px; margin: 8px 0; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
-            button { font-weight: bold; cursor: pointer; border: none; transition: 0.2s; }
-            .btn-start { background: #007bff; color: white; }
-            .btn-cancel { background: #dc3545; color: white; display: none; }
-            .stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 15px; margin-top: 20px; }
-            .process-card { border: 1px solid #eee; padding: 15px; border-radius: 6px; background: #fff; position: relative; }
-            .process-card.active { border-color: #28a745; background: #f8fff9; box-shadow: 0 0 8px rgba(40,167,69,0.2); }
-            .pid-badge { position: absolute; top: 10px; right: 10px; background: #333; color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; }
-            .metric-row { display: flex; justify-content: space-between; font-size: 0.85rem; margin: 4px 0; border-bottom: 1px solid #f9f9f9; }
-            .metric-label { color: #666; }
-            .metric-val { font-weight: bold; }
-            #global-status { margin-bottom: 20px; font-size: 0.9rem; color: #555; }
+            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f2f5; margin: 0; padding: 20px; color: #333; }
+            .container { max-width: 1000px; margin: 0 auto; display: grid; grid-template-columns: 350px 1fr; gap: 20px; }
+            .card { background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); height: fit-content; }
+            h2 { margin-top: 0; font-size: 1.2rem; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+            
+            label { display: block; font-size: 0.8rem; font-weight: bold; margin-top: 15px; color: #666; }
+            input, select { width: 100%; padding: 10px; margin: 5px 0 10px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; }
+            
+            .btn-group { display: flex; gap: 10px; margin-top: 10px; }
+            button { flex: 1; padding: 12px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; transition: all 0.2s; }
+            #btn-start { background: #007bff; color: white; }
+            #btn-start:disabled { background: #ccc; cursor: not-allowed; }
+            #btn-cancel { background: #dc3545; color: white; display: none; }
+            
+            .status-bar { background: #333; color: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-between; font-family: monospace; font-size: 0.9rem; }
+            
+            .process-group { margin-bottom: 15px; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; background: white; }
+            .process-header { background: #f8f9fa; padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; }
+            .pid-tag { background: #007bff; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; }
+            .current-tag { background: #28a745; }
+            
+            table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+            th { text-align: left; padding: 8px 15px; color: #888; border-bottom: 1px solid #eee; }
+            td { padding: 8px 15px; border-bottom: 1px solid #f9f9f9; }
         </style>
     </head>
     <body>
-        <div class='panel controls'>
-            <h3>Controller</h3>
-            <form id='calcForm'>
-                <label>Engine</label>
-                <select id='engine'><option value='c'>C Native</option><option value='delphi'>Delphi</option></select>
-                <label>Iterations</label>
-                <input type='number' id='iters' value='50' min='1' />
-                <label>Delay (ms)</label>
-                <input type='number' id='delay' value='100' min='0' />
-                <button type='submit' id='startBtn' class='btn-start'>Run Batch</button>
-                <button type='button' id='cancelBtn' class='btn-cancel'>Cancel Run</button>
-            </form>
-        </div>
+        <div class='container'>
+            <div class='card'>
+                <h2>Configuration</h2>
+                <form id='calcForm'>
+                    <label>Engine</label>
+                    <select id='engine'>
+                        <option value='c'>C (SimpleCom.dll)</option>
+                        <option value='delphi'>Delphi (SimpleComDelphi.dll)</option>
+                    </select>
 
-        <div class='panel dashboard'>
-            <div id='global-status'>Ready.</div>
-            <div id='processList' class='stats-grid'></div>
+                    <label>Threads (Concurrency)</label>
+                    <input type='number' id='threads' value='5' min='1' max='20' />
+
+                    <label>Iterations</label>
+                    <input type='number' id='iters' value='100' min='1' />
+
+                    <label>Values (X + Y)</label>
+                    <div style='display:flex; gap:10px'>
+                        <input type='number' id='x' value='10' />
+                        <input type='number' id='y' value='5' />
+                    </div>
+                    
+                    <div class='btn-group'>
+                        <button type='submit' id='btn-start'>Start Run</button>
+                        <button type='button' id='btn-cancel'>Cancel</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class='dashboard'>
+                <div class='status-bar'>
+                    <div>ITERATION: <span id='stat-iter'>0/0</span></div>
+                    <div>ELAPSED: <span id='stat-time'>0.0s</span></div>
+                    <div>ENGINE: <span id='stat-engine'>-</span></div>
+                </div>
+                <div id='process-list'></div>
+            </div>
         </div>
 
         <script>
-            let isRunning = false;
-            let processData = {};
-            let currentPid = null;
+            let abortController = null;
+            let processStats = {}; 
+            let startTime = null;
+            let completedIters = 0;
 
-            const form = document.getElementById('calcForm');
-            const startBtn = document.getElementById('startBtn');
-            const cancelBtn = document.getElementById('cancelBtn');
+            function formatBytes(bytes) {
+                if (bytes === 0) return '0 B';
+                const mb = bytes / (1024 * 1024);
+                return mb.toFixed(2) + ' MB';
+            }
 
-            const formatMem = (b) => (b / 1024 / 1024).toFixed(2) + ' MB';
-
-            function updateUI(globalInfo) {
-                document.getElementById('global-status').innerText = globalInfo;
-                const container = document.getElementById('processList');
+            function updateDisplay() {
+                const container = document.getElementById('process-list');
                 
-                // Sort by last seen, with currentPid at top
-                const sortedPids = Object.keys(processData).sort((a, b) => {
-                    if (a == currentPid) return -1;
-                    if (b == currentPid) return 1;
-                    return processData[b].lastSeen - processData[a].lastSeen;
+                // Sort by firstSeen DESC (Newest PID always at top)
+                const sortedPids = Object.keys(processStats).sort((a, b) => {
+                    return processStats[b].firstSeen - processStats[a].firstSeen;
                 });
 
                 container.innerHTML = sortedPids.map(pid => {
-                    const p = processData[pid];
+                    const s = processStats[pid];
+                    // Highlight if active in the last 1 second
+                    const isActive = (new Date() - s.lastTime) < 1000;
                     return `
-                        <div class='process-card ${pid == currentPid ? 'active' : ''}'>
-                            <span class='pid-badge'>PID: ${pid}</span>
-                            <div style='font-weight:bold; margin-bottom:10px;'>${p.engine}</div>
-                            <div class='metric-row'><span class='metric-label'>Calls:</span><span class='metric-val'>${p.count}</span></div>
-                            <div class='metric-row'><span class='metric-label'>Last Seen:</span><span class='metric-val'>${p.lastSeen.toLocaleTimeString()}</span></div>
-                            <div class='metric-row'><span class='metric-label'>Memory (Min/Max/Last):</span><span class='metric-val'>${formatMem(p.mem.min)} / ${formatMem(p.mem.max)} / ${formatMem(p.mem.last)}</span></div>
-                            <div class='metric-row'><span class='metric-label'>Handles (Min/Max/Last):</span><span class='metric-val'>${p.hnd.min} / ${p.hnd.max} / ${p.hnd.last}</span></div>
+                        <div class='process-group'>
+                            <div class='process-header'>
+                                <span><span class='pid-tag ${isActive ? 'current-tag' : ''}'>PID ${pid}</span> <strong>${s.engine}</strong></span>
+                                <span style='font-size:0.8rem; color:#666'>Last: ${s.lastTime.toLocaleTimeString()}</span>
+                            </div>
+                            <table>
+                                <tr><th>Metric</th><th>Min</th><th>Max</th><th>Last</th><th>Count</th></tr>
+                                <tr>
+                                    <td>Memory</td>
+                                    <td>${formatBytes(s.memMin)}</td>
+                                    <td>${formatBytes(s.memMax)}</td>
+                                    <td>${formatBytes(s.memLast)}</td>
+                                    <td rowspan='2' style='vertical-align:middle; text-align:center; font-size:1.2rem; font-weight:bold; border-left:1px solid #eee'>${s.count}</td>
+                                </tr>
+                                <tr>
+                                    <td>Handles</td>
+                                    <td>${s.hndMin}</td><td>${s.hndMax}</td><td>${s.hndLast}</td>
+                                </tr>
+                            </table>
                         </div>
                     `;
                 }).join('');
             }
 
-            form.onsubmit = async (e) => {
-                e.preventDefault();
-                isRunning = true;
-                startBtn.disabled = true;
-                cancelBtn.style.display = 'block';
+            async function runIteration(engine, x, y) {
+                if (abortController.signal.aborted) return;
+
+                const formData = new URLSearchParams({ engine, x, y });
+                const response = await fetch('/calculate', { 
+                    method: 'POST', 
+                    body: formData,
+                    signal: abortController.signal
+                });
                 
-                const iterations = parseInt(document.getElementById('iters').value);
-                const delay = parseInt(document.getElementById('delay').value);
-                const startTime = Date.now();
+                const data = await response.json();
+                if (!data.success) throw new Error(data.detail);
 
-                for (let i = 1; i <= iterations && isRunning; i++) {
-                    try {
-                        const res = await fetch('/calculate', {
-                            method: 'POST',
-                            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                            body: new URLSearchParams({ 
-                                engine: document.getElementById('engine').value,
-                                x: Math.floor(Math.random() * 100), 
-                                y: Math.floor(Math.random() * 100) 
-                            })
-                        });
-                        
-                        const data = await res.json();
-                        const stats = JSON.parse(data.stats); // Your new BSTR JSON
-                        const pid = stats.pid;
-                        currentPid = pid;
-
-                        if (!processData[pid]) {
-                            processData[pid] = { 
-                                engine: stats.engine, count: 0, lastSeen: null,
-                                mem: { min: Infinity, max: 0, last: 0 },
-                                hnd: { min: Infinity, max: 0, last: 0 }
-                            };
-                        }
-
-                        const p = processData[pid];
-                        p.count++;
-                        p.lastSeen = new Date();
-                        
-                        // Memory tracking
-                        p.mem.last = stats.memoryBytes;
-                        p.mem.min = Math.min(p.mem.min, stats.memoryBytes);
-                        p.mem.max = Math.max(p.mem.max, stats.memoryBytes);
-                        
-                        // Handles tracking
-                        p.hnd.last = stats.handles.total;
-                        p.hnd.min = Math.min(p.hnd.min, stats.handles.total);
-                        p.hnd.max = Math.max(p.hnd.max, stats.handles.total);
-
-                        const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-                        updateUI(`Running... Iteration: ${i}/${iterations} | Elapsed: ${elapsed}s`);
-                        
-                        if (delay > 0) await new Promise(r => setTimeout(r, delay));
-
-                    } catch (err) {
-                        console.error(err);
-                        isRunning = false;
-                    }
+                const comInfo = JSON.parse(data.engineJson);
+                const pid = comInfo.pid;
+                
+                if (!processStats[pid]) {
+                    processStats[pid] = {
+                        engine: comInfo.engine,
+                        count: 0,
+                        firstSeen: performance.now(),
+                        lastTime: new Date(),
+                        memMin: Infinity, memMax: -Infinity, memLast: 0,
+                        hndMin: Infinity, hndMax: -Infinity, hndLast: 0
+                    };
                 }
 
-                isRunning = false;
-                startBtn.disabled = false;
-                cancelBtn.style.display = 'none';
-                updateUI('Run Complete.');
+                const s = processStats[pid];
+                s.count++;
+                s.lastTime = new Date();
+                s.memLast = comInfo.memoryBytes;
+                if (s.memLast < s.memMin) s.memMin = s.memLast;
+                if (s.memLast > s.memMax) s.memMax = s.memLast;
+                s.hndLast = comInfo.handles.total;
+                if (s.hndLast < s.hndMin) s.hndMin = s.hndLast;
+                if (s.hndLast > s.hndMax) s.hndMax = s.hndLast;
+
+                completedIters++;
+                document.getElementById('stat-iter').innerText = completedIters + '/' + document.getElementById('iters').value;
+                document.getElementById('stat-engine').innerText = comInfo.engine;
+                updateDisplay();
+            }
+
+            document.getElementById('btn-cancel').onclick = () => {
+                if (abortController) abortController.abort();
             };
 
-            cancelBtn.onclick = () => { isRunning = false; };
+            document.getElementById('calcForm').onsubmit = async (e) => {
+                e.preventDefault();
+                
+                // Clear Dashboard for new run
+                processStats = {};
+                completedIters = 0;
+                updateDisplay();
+
+                const totalIters = parseInt(document.getElementById('iters').value);
+                const concurrency = parseInt(document.getElementById('threads').value);
+                const engine = document.getElementById('engine').value;
+                const x = document.getElementById('x').value;
+                const y = document.getElementById('y').value;
+
+                const startBtn = document.getElementById('btn-start');
+                const cancelBtn = document.getElementById('btn-cancel');
+                
+                startBtn.disabled = true;
+                cancelBtn.style.display = 'block';
+                abortController = new AbortController();
+                startTime = performance.now();
+                
+                const timerInterval = setInterval(() => {
+                    document.getElementById('stat-time').innerText = ((performance.now() - startTime) / 1000).toFixed(1) + 's';
+                }, 100);
+
+                try {
+                    // Parallel Execution Logic
+                    const queue = Array(totalIters).fill(null);
+                    const workers = Array(concurrency).fill(0).map(async () => {
+                        while (queue.length > 0 && !abortController.signal.aborted) {
+                            queue.pop();
+                            await runIteration(engine, x, y);
+                        }
+                    });
+
+                    await Promise.all(workers);
+                } catch (err) {
+                    if (err.name !== 'AbortError') console.error(err);
+                } finally {
+                    clearInterval(timerInterval);
+                    startBtn.disabled = false;
+                    cancelBtn.style.display = 'none';
+                }
+            };
         </script>
     </body>
     </html>";
+
     return Results.Content(html, "text/html");
 });
 
-app.MapPost("/calculate", async (HttpRequest request) => {
-    var form = await request.ReadFormAsync();
-    int x = int.Parse(form["x"]!);
-    int y = int.Parse(form["y"]!);
-    var proxy = form["engine"] == "delphi" ? proxyDelphi : proxyC;
+app.MapPost("/calculate", async (HttpRequest request) =>
+{
+    try
+    {
+        var form = await request.ReadFormAsync();
+        int x = int.Parse(form["x"]!);
+        int y = int.Parse(form["y"]!);
+        string engine = form["engine"]!;
 
-    var sum = proxy.Add(x, y);
-    var stats = proxy.GetInfo(); // This is the JSON string from COM
+        var activeProxy = engine == "delphi" ? proxyDelphi : proxyC;
 
-    return Results.Ok(new { success = true, result = sum, stats = stats });
+        var sum = activeProxy.Add(x, y);
+        var info = activeProxy.GetInfo(); 
+
+        return Results.Ok(new
+        {
+            Success = true,
+            Result = sum,
+            EngineJson = info
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem(ex.Message);
+    }
 });
 
 app.Run();
