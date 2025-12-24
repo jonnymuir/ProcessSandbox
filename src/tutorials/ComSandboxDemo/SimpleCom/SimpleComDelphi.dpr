@@ -51,6 +51,11 @@ type
 
 { TSimpleCalculator }
 
+function TSimpleCalculator.Add(a, b: Integer): Integer; stdcall;
+begin
+  Result := a + b;
+end;
+
 function TSimpleCalculator.GetInfo: TBSTR; stdcall;
 var
   S: WideString;
