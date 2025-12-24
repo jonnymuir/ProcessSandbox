@@ -68,6 +68,9 @@ app.MapGet("/", () =>
             th { text-align: left; padding: 8px 15px; color: #888; border-bottom: 1px solid #eee; }
             td { padding: 8px 15px; border-bottom: 1px solid #f9f9f9; }
             .result-cell { font-size: 1.4rem; font-weight: bold; color: #28a745; background: #f0f9ff; text-align: center; width: 120px; }
+
+            #error-box { margin-top: 20px; display: none; }
+            .error-item { background: #fff1f0; border: 1px solid #ffa39e; color: #cf1322; padding: 8px 12px; border-radius: 4px; margin-bottom: 5px; font-size: 0.85rem; font-family: monospace; }
         </style>
     </head>
     <body>
@@ -106,6 +109,10 @@ app.MapGet("/", () =>
                     <div>ELAPSED: <span id='stat-time'>0.0s</span></div>
                     <div>ENGINE: <span id='stat-engine'>-</span></div>
                 </div>
+                <div id='error-box'>
+                    <h3 style='color: #cf1322; font-size: 1rem;'>Errors Encountered</h3>
+                    <div id='error-list'></div>
+                </div>
                 <div id='process-list'></div>
             </div>
         </div>
@@ -113,8 +120,10 @@ app.MapGet("/", () =>
         <script>
             let abortController = null;
             let processStats = {}; 
+            let globalErrors = [];
             let startTime = null;
             let completedIters = 0;
+            let targetIters = 0;
 
             function formatBytes(bytes) {
                 if (bytes === 0) return '0 B';
@@ -124,8 +133,10 @@ app.MapGet("/", () =>
 
             function updateDisplay() {
                 const container = document.getElementById('process-list');
+                const errorBox = document.getElementById('error-box');
+                const errorList = document.getElementById('error-list');
                 
-                // Sort: Newest 'firstSeen' at the top
+                // Update PID Cards
                 const sortedPids = Object.keys(processStats).sort((a, b) => {
                     return processStats[b].firstSeen - processStats[a].firstSeen;
                 });
@@ -159,51 +170,73 @@ app.MapGet("/", () =>
                         </div>
                     `;
                 }).join('');
+
+                // Update Errors
+                if (globalErrors.length > 0) {
+                    errorBox.style.display = 'block';
+                    errorList.innerHTML = globalErrors.map(err => `<div class='error-item'>[${err.time}] Iteration ${err.iter}: ${err.msg}</div>`).join('');
+                } else {
+                    errorBox.style.display = 'none';
+                }
             }
 
-            async function runIteration(engine, x, y) {
+            async function runIteration(engine, x, y, currentIter) {
                 if (abortController.signal.aborted) return;
 
-                const formData = new URLSearchParams({ engine, x, y });
-                const response = await fetch('/calculate', { 
-                    method: 'POST', 
-                    body: formData,
-                    signal: abortController.signal
-                });
-                
-                const data = await response.json();
-                if (!data.success) throw new Error(data.detail);
+                try {
+                    const formData = new URLSearchParams({ engine, x, y });
+                    const response = await fetch('/calculate', { 
+                        method: 'POST', 
+                        body: formData,
+                        signal: abortController.signal
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (!response.ok || !data.success) {
+                        throw new Error(data.detail || 'Server returned an error');
+                    }
 
-                const comInfo = JSON.parse(data.engineJson);
-                const pid = comInfo.pid;
-                
-                if (!processStats[pid]) {
-                    processStats[pid] = {
-                        engine: comInfo.engine,
-                        count: 0,
-                        lastResult: 0,
-                        firstSeen: performance.now(),
-                        lastTime: new Date(),
-                        memMin: Infinity, memMax: -Infinity, memLast: 0,
-                        hndMin: Infinity, hndMax: -Infinity, hndLast: 0
-                    };
+                    const comInfo = JSON.parse(data.engineJson);
+                    const pid = comInfo.pid;
+                    
+                    if (!processStats[pid]) {
+                        processStats[pid] = {
+                            engine: comInfo.engine,
+                            count: 0,
+                            lastResult: 0,
+                            firstSeen: performance.now(),
+                            lastTime: new Date(),
+                            memMin: Infinity, memMax: -Infinity, memLast: 0,
+                            hndMin: Infinity, hndMax: -Infinity, hndLast: 0
+                        };
+                    }
+
+                    const s = processStats[pid];
+                    s.count++;
+                    s.lastResult = data.result;
+                    s.lastTime = new Date();
+                    s.memLast = comInfo.memoryBytes;
+                    if (s.memLast < s.memMin) s.memMin = s.memLast;
+                    if (s.memLast > s.memMax) s.memMax = s.memLast;
+                    s.hndLast = comInfo.handles.total;
+                    if (s.hndLast < s.hndMin) s.hndMin = s.hndLast;
+                    if (s.hndLast > s.hndMax) s.hndMax = s.hndLast;
+
+                    document.getElementById('stat-engine').innerText = comInfo.engine;
+                } catch (err) {
+                    if (err.name !== 'AbortError') {
+                        globalErrors.push({
+                            time: new Date().toLocaleTimeString(),
+                            iter: currentIter,
+                            msg: err.message
+                        });
+                    }
+                } finally {
+                    completedIters++;
+                    document.getElementById('stat-iter').innerText = completedIters + '/' + targetIters;
+                    updateDisplay();
                 }
-
-                const s = processStats[pid];
-                s.count++;
-                s.lastResult = data.result;
-                s.lastTime = new Date();
-                s.memLast = comInfo.memoryBytes;
-                if (s.memLast < s.memMin) s.memMin = s.memLast;
-                if (s.memLast > s.memMax) s.memMax = s.memLast;
-                s.hndLast = comInfo.handles.total;
-                if (s.hndLast < s.hndMin) s.hndMin = s.hndLast;
-                if (s.hndLast > s.hndMax) s.hndMax = s.hndLast;
-
-                completedIters++;
-                document.getElementById('stat-iter').innerText = completedIters + '/' + document.getElementById('iters').value;
-                document.getElementById('stat-engine').innerText = comInfo.engine;
-                updateDisplay();
             }
 
             document.getElementById('btn-cancel').onclick = () => {
@@ -215,10 +248,11 @@ app.MapGet("/", () =>
                 
                 // Reset State
                 processStats = {};
+                globalErrors = [];
                 completedIters = 0;
+                targetIters = parseInt(document.getElementById('iters').value);
                 updateDisplay();
 
-                const totalIters = parseInt(document.getElementById('iters').value);
                 const concurrency = parseInt(document.getElementById('threads').value);
                 const engine = document.getElementById('engine').value;
                 const x = document.getElementById('x').value;
@@ -237,12 +271,11 @@ app.MapGet("/", () =>
                 }, 100);
 
                 try {
-                    const queue = Array(totalIters).fill(null);
+                    let nextIterId = 1;
                     const workers = Array(concurrency).fill(0).map(async () => {
-                        while (queue.length > 0 && !abortController.signal.aborted) {
-                            queue.pop();
-                            // Optional: randomize x and y here if you want varying results
-                            await runIteration(engine, x, y);
+                        while (nextIterId <= targetIters && !abortController.signal.aborted) {
+                            const current = nextIterId++;
+                            await runIteration(engine, x, y, current);
                         }
                     });
 
@@ -274,6 +307,8 @@ app.MapPost("/calculate", async (HttpRequest request) =>
 
         var activeProxy = engine == "delphi" ? proxyDelphi : proxyC;
 
+        // Note: The Add method will throw if the sandbox process crashes 
+        // or a timeout occurs, which will be caught below.
         var sum = activeProxy.Add(x, y);
         var info = activeProxy.GetInfo(); 
 
@@ -286,7 +321,8 @@ app.MapPost("/calculate", async (HttpRequest request) =>
     }
     catch (Exception ex)
     {
-        return Results.Problem(ex.Message);
+        // Return a 500 status code so the fetch.ok property becomes false
+        return Results.Json(new { Success = false, detail = ex.Message }, statusCode: 500);
     }
 });
 
