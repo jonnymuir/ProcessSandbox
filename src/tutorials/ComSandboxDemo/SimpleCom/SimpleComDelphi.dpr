@@ -22,6 +22,7 @@ type
 
 // Manually import the function from psapi.dll
 function GetProcessMemoryInfo(Process: HANDLE; ppsmemCounters: Pointer; cb: DWORD): BOOL; stdcall; external 'psapi.dll';
+function GetProcessHandleCount(hProcess: HANDLE; var pdwHandleCount: DWORD): BOOL; stdcall; external 'kernel32.dll';
 
 const
   CLSID_SimpleCalculator: TGUID = '{11111111-2222-3333-4444-555555555555}';
@@ -59,19 +60,24 @@ var
   GdiHandles, UserHandles: Integer;
   WorkingSet: UInt64;
 begin
-  // 1. Collect Stats
   PID := GetCurrentProcessID;
   
   WorkingSet := 0;
+  FillChar(PMC, SizeOf(PMC), 0);
+  PMC.cb := SizeOf(PMC);
+  
+  // 1. Memory Stats (from our manual psapi import)
   if GetProcessMemoryInfo(GetCurrentProcess, @PMC, SizeOf(PMC)) then
     WorkingSet := PMC.WorkingSetSize;
 
-  GetProcessHandleCount(GetCurrentProcess, @HandleCount);
+  // 2. Handle Count (from our manual kernel32 import)
+  HandleCount := 0;
+  GetProcessHandleCount(GetCurrentProcess, HandleCount);
+
+  // 3. GDI/User Objects (usually found in Windows/User32)
   GdiHandles := GetGuiResources(GetCurrentProcess, 0);
   UserHandles := GetGuiResources(GetCurrentProcess, 1);
 
-  // 2. Format as JSON string
-  // Using WideFormat to ensure we handle the WideString properly for the BSTR
   S := WideFormat(
     '{' +
     '"engine": "Running the manual Delphi FPC COM object",' +
