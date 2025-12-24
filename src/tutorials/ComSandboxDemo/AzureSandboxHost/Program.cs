@@ -1,152 +1,195 @@
-using System.ComponentModel;
 using Contracts;
 using ProcessSandbox.Pool;
 using ProcessSandbox.Proxy;
+using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
 
-var loggerFactory = LoggerFactory.Create(b =>
-{
+var loggerFactory = LoggerFactory.Create(b => {
     b.AddConsole();
     b.SetMinimumLevel(LogLevel.Debug);
 });
 
-var proxyC = await ProcessProxy.CreateAsync<ICalculator>(new ProcessPoolConfiguration
-{
+// Setup Proxies
+var configBase = new ProcessPoolConfiguration {
     DotNetVersion = DotNetVersion.Net48_32Bit,
-    ImplementationAssemblyPath = Path.Combine(AppContext.BaseDirectory, "workers", "net48", "win-x86", "SimpleCom.dll"),
     ComClsid = new Guid("11111111-2222-3333-4444-555555555555")
+};
+
+var proxyC = await ProcessProxy.CreateAsync<ICalculator>(configBase with {
+    ImplementationAssemblyPath = Path.Combine(AppContext.BaseDirectory, "workers", "net48", "win-x86", "SimpleCom.dll")
 }, loggerFactory);
 
-var proxyDelphi = await ProcessProxy.CreateAsync<ICalculator>(new ProcessPoolConfiguration
-{
-    DotNetVersion = DotNetVersion.Net48_32Bit,
-    ImplementationAssemblyPath = Path.Combine(AppContext.BaseDirectory, "workers", "net48", "win-x86", "SimpleComDelphi.dll"),
-    ComClsid = new Guid("11111111-2222-3333-4444-555555555555")
+var proxyDelphi = await ProcessProxy.CreateAsync<ICalculator>(configBase with {
+    ImplementationAssemblyPath = Path.Combine(AppContext.BaseDirectory, "workers", "net48", "win-x86", "SimpleComDelphi.dll")
 }, loggerFactory);
 
-app.MapGet("/", () =>
-{
-var html = @"
+app.MapGet("/", () => {
+    var html = @"
     <!DOCTYPE html>
     <html>
     <head>
-        <title>Native COM Sandbox</title>
-        <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+        <title>COM Sandbox Dashboard</title>
         <style>
-            body { font-family: sans-serif; display: flex; justify-content: center; padding: 50px; background: #f0f2f5; }
-            .card { 
-                background: white; 
-                padding: 2rem; 
-                border-radius: 8px; 
-                box-shadow: 0 4px 6px rgba(0,0,0,0.1); 
-                width: 90%;
-                max-width: 400px;
-                box-sizing: border-box; 
-            }            
-            input, select { height: 2.5rem; width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
-            label { font-size: 0.8rem; font-weight: bold; color: #555; }
-            button { width: 100%; padding: 10px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; margin-top: 10px;}
-            button:hover { background: #0056b3; }
-            #result-box { margin-top: 20px; padding: 15px; border-radius: 4px; background: #e9ecef; display: none; text-align: center; }
-            .result-val { font-size: 1.5rem; color: #28a745; font-weight: bold; }
-            .info { font-size: 0.75rem; color: #666; margin-top: 1.5rem; border-top: 1px solid #eee; padding-top: 10px; line-height: 1.4; }
+            body { font-family: 'Segoe UI', sans-serif; background: #f4f7f9; padding: 20px; display: flex; gap: 20px; }
+            .panel { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+            .controls { width: 300px; }
+            .dashboard { flex-grow: 1; }
+            input, select, button { width: 100%; padding: 10px; margin: 8px 0; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+            button { font-weight: bold; cursor: pointer; border: none; transition: 0.2s; }
+            .btn-start { background: #007bff; color: white; }
+            .btn-cancel { background: #dc3545; color: white; display: none; }
+            .stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 15px; margin-top: 20px; }
+            .process-card { border: 1px solid #eee; padding: 15px; border-radius: 6px; background: #fff; position: relative; }
+            .process-card.active { border-color: #28a745; background: #f8fff9; box-shadow: 0 0 8px rgba(40,167,69,0.2); }
+            .pid-badge { position: absolute; top: 10px; right: 10px; background: #333; color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; }
+            .metric-row { display: flex; justify-content: space-between; font-size: 0.85rem; margin: 4px 0; border-bottom: 1px solid #f9f9f9; }
+            .metric-label { color: #666; }
+            .metric-val { font-weight: bold; }
+            #global-status { margin-bottom: 20px; font-size: 0.9rem; color: #555; }
         </style>
     </head>
     <body>
-        <div class='card'>
-            <h2 style='margin-top:0'>COM Sandbox Multi-Engine</h2>
+        <div class='panel controls'>
+            <h3>Controller</h3>
             <form id='calcForm'>
-                <label>Target Engine</label>
-                <select name='engine' id='engine'>
-                    <option value='c'>SimpleCom (C language)</option>
-                    <option value='delphi'>SimpleComDelphi (Delphi)</option>
-                </select>
-
-                <label>Inputs</label>
-                <input type='number' id='x' name='x' placeholder='First Number' value='10' required />
-                <input type='number' id='y' name='y' placeholder='Second Number' value='5' required />
-                
-                <button type='submit' id='btn'>Calculate in Sandbox</button>
+                <label>Engine</label>
+                <select id='engine'><option value='c'>C Native</option><option value='delphi'>Delphi</option></select>
+                <label>Iterations</label>
+                <input type='number' id='iters' value='50' min='1' />
+                <label>Delay (ms)</label>
+                <input type='number' id='delay' value='100' min='0' />
+                <button type='submit' id='startBtn' class='btn-start'>Run Batch</button>
+                <button type='button' id='cancelBtn' class='btn-cancel'>Cancel Run</button>
             </form>
+        </div>
 
-            <div id='result-box'>
-                <div style='font-size: 0.8rem; color: #444;'>Result:</div>
-                <div id='sum-display' class='result-val'>0</div>
-                <div id='engine-info' style='font-size: 0.7rem; color: #666; margin-top: 5px; font-style: italic;'></div>
-            </div>
+        <div class='panel dashboard'>
+            <div id='global-status'>Ready.</div>
+            <div id='processList' class='stats-grid'></div>
         </div>
 
         <script>
-            document.getElementById('calcForm').addEventListener('submit', async (e) => {
-                e.preventDefault();
-                const btn = document.getElementById('btn');
-                const box = document.getElementById('result-box');
-                
-                btn.disabled = true;
-                btn.innerText = 'Routing to Worker...';
+            let isRunning = false;
+            let processData = {};
+            let currentPid = null;
 
-                try {
-                    const formData = new FormData(e.target);
-                    const response = await fetch('/calculate', { method: 'POST', body: formData });
-                    const data = await response.json();
-                    
-                    if (data.success) {
-                        document.getElementById('sum-display').innerText = data.result;
-                        document.getElementById('engine-info').innerText = 'Backend: ' + data.engine;
-                        box.style.display = 'block';
-                    } else {
-                        alert('Error: ' + data.detail);
+            const form = document.getElementById('calcForm');
+            const startBtn = document.getElementById('startBtn');
+            const cancelBtn = document.getElementById('cancelBtn');
+
+            const formatMem = (b) => (b / 1024 / 1024).toFixed(2) + ' MB';
+
+            function updateUI(globalInfo) {
+                document.getElementById('global-status').innerText = globalInfo;
+                const container = document.getElementById('processList');
+                
+                // Sort by last seen, with currentPid at top
+                const sortedPids = Object.keys(processData).sort((a, b) => {
+                    if (a == currentPid) return -1;
+                    if (b == currentPid) return 1;
+                    return processData[b].lastSeen - processData[a].lastSeen;
+                });
+
+                container.innerHTML = sortedPids.map(pid => {
+                    const p = processData[pid];
+                    return `
+                        <div class='process-card ${pid == currentPid ? 'active' : ''}'>
+                            <span class='pid-badge'>PID: ${pid}</span>
+                            <div style='font-weight:bold; margin-bottom:10px;'>${p.engine}</div>
+                            <div class='metric-row'><span class='metric-label'>Calls:</span><span class='metric-val'>${p.count}</span></div>
+                            <div class='metric-row'><span class='metric-label'>Last Seen:</span><span class='metric-val'>${p.lastSeen.toLocaleTimeString()}</span></div>
+                            <div class='metric-row'><span class='metric-label'>Memory (Min/Max/Last):</span><span class='metric-val'>${formatMem(p.mem.min)} / ${formatMem(p.mem.max)} / ${formatMem(p.mem.last)}</span></div>
+                            <div class='metric-row'><span class='metric-label'>Handles (Min/Max/Last):</span><span class='metric-val'>${p.hnd.min} / ${p.hnd.max} / ${p.hnd.last}</span></div>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            form.onsubmit = async (e) => {
+                e.preventDefault();
+                isRunning = true;
+                startBtn.disabled = true;
+                cancelBtn.style.display = 'block';
+                
+                const iterations = parseInt(document.getElementById('iters').value);
+                const delay = parseInt(document.getElementById('delay').value);
+                const startTime = Date.now();
+
+                for (let i = 1; i <= iterations && isRunning; i++) {
+                    try {
+                        const res = await fetch('/calculate', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                            body: new URLSearchParams({ 
+                                engine: document.getElementById('engine').value,
+                                x: Math.floor(Math.random() * 100), 
+                                y: Math.floor(Math.random() * 100) 
+                            })
+                        });
+                        
+                        const data = await res.json();
+                        const stats = JSON.parse(data.stats); // Your new BSTR JSON
+                        const pid = stats.pid;
+                        currentPid = pid;
+
+                        if (!processData[pid]) {
+                            processData[pid] = { 
+                                engine: stats.engine, count: 0, lastSeen: null,
+                                mem: { min: Infinity, max: 0, last: 0 },
+                                hnd: { min: Infinity, max: 0, last: 0 }
+                            };
+                        }
+
+                        const p = processData[pid];
+                        p.count++;
+                        p.lastSeen = new Date();
+                        
+                        // Memory tracking
+                        p.mem.last = stats.memoryBytes;
+                        p.mem.min = Math.min(p.mem.min, stats.memoryBytes);
+                        p.mem.max = Math.max(p.mem.max, stats.memoryBytes);
+                        
+                        // Handles tracking
+                        p.hnd.last = stats.handles.total;
+                        p.hnd.min = Math.min(p.hnd.min, stats.handles.total);
+                        p.hnd.max = Math.max(p.hnd.max, stats.handles.total);
+
+                        const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+                        updateUI(`Running... Iteration: ${i}/${iterations} | Elapsed: ${elapsed}s`);
+                        
+                        if (delay > 0) await new Promise(r => setTimeout(r, delay));
+
+                    } catch (err) {
+                        console.error(err);
+                        isRunning = false;
                     }
-                } catch (err) {
-                    alert('Request failed.');
-                } finally {
-                    btn.disabled = false;
-                    btn.innerText = 'Calculate in Sandbox';
                 }
-            });
+
+                isRunning = false;
+                startBtn.disabled = false;
+                cancelBtn.style.display = 'none';
+                updateUI('Run Complete.');
+            };
+
+            cancelBtn.onclick = () => { isRunning = false; };
         </script>
     </body>
     </html>";
-
     return Results.Content(html, "text/html");
 });
 
-app.MapPost("/calculate", async (HttpRequest request) =>
-{
-    try
-    {
-        // Parse form values
-        var form = await request.ReadFormAsync();
+app.MapPost("/calculate", async (HttpRequest request) => {
+    var form = await request.ReadFormAsync();
+    int x = int.Parse(form["x"]!);
+    int y = int.Parse(form["y"]!);
+    var proxy = form["engine"] == "delphi" ? proxyDelphi : proxyC;
 
-        if (form["x"].Count == 0 || form["y"].Count == 0)
-        {
-            throw new Exception("Both 'x' and 'y' values are required.");
-        }
+    var sum = proxy.Add(x, y);
+    var stats = proxy.GetInfo(); // This is the JSON string from COM
 
-        int x = int.Parse(form["x"]!);
-        int y = int.Parse(form["y"]!);
-        string? engine = form["engine"];
-
-        var activeProxy = engine == "delphi" ? proxyDelphi : proxyC;
-
-        // Call our 32-bit Native COM object via the Sandbox Proxy
-        var sum = activeProxy.Add(x, y);
-        var info = activeProxy.GetInfo();
-
-        return Results.Ok(new
-        {
-            Success = true,
-            Input = new { x, y },
-            Result = sum,
-            Engine = info
-        });
-    }
-    catch (Exception ex)
-    {
-        return Results.Problem(ex.Message);
-    }
+    return Results.Ok(new { success = true, result = sum, stats = stats });
 });
 
 app.Run();
