@@ -12,7 +12,7 @@ var loggerFactory = LoggerFactory.Create(b =>
     b.SetMinimumLevel(LogLevel.Debug);
 });
 
-// Setup C Engine Configuration (.NET 4.8 compatible)
+// .NET 4.8 Compatible Configurations
 var poolConfigC = new ProcessPoolConfiguration
 {
     DotNetVersion = DotNetVersion.Net48_32Bit,
@@ -22,7 +22,6 @@ var poolConfigC = new ProcessPoolConfiguration
     ImplementationAssemblyPath = Path.Combine(AppContext.BaseDirectory, "workers", "net48", "win-x86", "SimpleCom.dll")
 };
 
-// Setup Delphi Engine Configuration (.NET 4.8 compatible)
 var poolConfigDelphi = new ProcessPoolConfiguration
 {
     DotNetVersion = DotNetVersion.Net48_32Bit,
@@ -41,10 +40,18 @@ app.MapGet("/", () =>
     <!DOCTYPE html>
     <html>
     <head>
-        <title>COM Sandbox Concurrency Dashboard</title>
+        <title>COM Sandbox Dashboard</title>
+        <meta name='viewport' content='width=device-width, initial-scale=1'>
         <style>
             body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f2f5; margin: 0; padding: 20px; color: #333; }
             .container { max-width: 1100px; margin: 0 auto; display: grid; grid-template-columns: 350px 1fr; gap: 20px; }
+            
+            /* Mobile Responsiveness */
+            @media (max-width: 900px) {
+                .container { grid-template-columns: 1fr; }
+                body { padding: 10px; }
+            }
+
             .card { background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); height: fit-content; }
             h2 { margin-top: 0; font-size: 1.2rem; border-bottom: 2px solid #eee; padding-bottom: 10px; }
             
@@ -57,17 +64,19 @@ app.MapGet("/", () =>
             #btn-start:disabled { background: #ccc; cursor: not-allowed; }
             #btn-cancel { background: #dc3545; color: white; display: none; }
             
-            .status-bar { background: #333; color: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-between; font-family: monospace; font-size: 0.9rem; }
+            .status-bar { background: #333; color: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: flex; flex-wrap: wrap; justify-content: space-between; font-family: monospace; font-size: 0.9rem; gap: 10px; }
             
             .process-group { margin-bottom: 15px; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; background: white; transition: all 0.3s ease; }
-            .process-header { background: #f8f9fa; padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; }
+            .process-header { background: #f8f9fa; padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; flex-wrap: wrap; gap: 5px; }
             .pid-tag { background: #007bff; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; }
+            .host-tag { background: #6f42c1; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; }
             .current-tag { background: #28a745; box-shadow: 0 0 8px rgba(40,167,69,0.4); }
             
-            table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+            .table-wrapper { overflow-x: auto; }
+            table { width: 100%; border-collapse: collapse; font-size: 0.85rem; min-width: 500px; }
             th { text-align: left; padding: 8px 15px; color: #888; border-bottom: 1px solid #eee; }
             td { padding: 8px 15px; border-bottom: 1px solid #f9f9f9; }
-            .result-cell { font-size: 1.4rem; font-weight: bold; color: #28a745; background: #f0f9ff; text-align: center; width: 120px; }
+            .result-cell { font-size: 1.4rem; font-weight: bold; color: #28a745; background: #f0f9ff; text-align: center; width: 100px; }
 
             #error-box { margin-top: 20px; display: none; }
             .error-item { background: #fff1f0; border: 1px solid #ffa39e; color: #cf1322; padding: 8px 12px; border-radius: 4px; margin-bottom: 5px; font-size: 0.85rem; font-family: monospace; }
@@ -84,13 +93,16 @@ app.MapGet("/", () =>
                         <option value='delphi'>Delphi (SimpleComDelphi.dll)</option>
                     </select>
 
-                    <label>Threads (Concurrency)</label>
-                    <input type='number' id='threads' value='5' min='1' max='20' />
+                    <label>Client Threads</label>
+                    <input type='number' id='threads' value='2' min='1' max='20' />
 
-                    <label>Total Iterations</label>
+                    <label>Server Batch Size (Calls per Request)</label>
+                    <input type='number' id='batchSize' value='10' min='1' max='100' />
+
+                    <label>Target Total Iterations</label>
                     <input type='number' id='iters' value='100' min='1' />
 
-                    <label>Fixed Values (X + Y)</label>
+                    <label>Values (X + Y)</label>
                     <div style='display:flex; gap:10px'>
                         <input type='number' id='x' value='10' />
                         <input type='number' id='y' value='5' />
@@ -107,12 +119,14 @@ app.MapGet("/", () =>
                 <div class='status-bar'>
                     <div>COMPLETED: <span id='stat-iter'>0/0</span></div>
                     <div>ELAPSED: <span id='stat-time'>0.0s</span></div>
-                    <div>ENGINE: <span id='stat-engine'>-</span></div>
+                    <div>HOST PID: <span id='stat-host'>-</span></div>
                 </div>
+                
                 <div id='error-box'>
                     <h3 style='color: #cf1322; font-size: 1rem;'>Errors Encountered</h3>
                     <div id='error-list'></div>
                 </div>
+
                 <div id='process-list'></div>
             </div>
         </div>
@@ -123,7 +137,7 @@ app.MapGet("/", () =>
             let globalErrors = [];
             let startTime = null;
             let completedIters = 0;
-            let targetIters = 0;
+            let totalTarget = 0;
 
             function formatBytes(bytes) {
                 if (bytes === 0) return '0 B';
@@ -136,55 +150,57 @@ app.MapGet("/", () =>
                 const errorBox = document.getElementById('error-box');
                 const errorList = document.getElementById('error-list');
                 
-                // Update PID Cards
-                const sortedPids = Object.keys(processStats).sort((a, b) => {
-                    return processStats[b].firstSeen - processStats[a].firstSeen;
-                });
+                const sortedPids = Object.keys(processStats).sort((a, b) => processStats[b].firstSeen - processStats[a].firstSeen);
 
                 container.innerHTML = sortedPids.map(pid => {
                     const s = processStats[pid];
-                    const isActive = (new Date() - s.lastTime) < 800;
+                    const isActive = (new Date() - s.lastTime) < 1000;
                     return `
                         <div class='process-group'>
                             <div class='process-header'>
-                                <span><span class='pid-tag ${isActive ? 'current-tag' : ''}'>PID ${pid}</span> <strong>${s.engine}</strong></span>
-                                <span style='font-size:0.8rem; color:#666'>Last update: ${s.lastTime.toLocaleTimeString()}</span>
+                                <div>
+                                    <span class='pid-tag ${isActive ? 'current-tag' : ''}'>WORKER PID ${pid}</span>
+                                    <span class='host-tag'>HOST ${s.hostPid}</span>
+                                    <strong>${s.engine}</strong>
+                                </div>
+                                <span style='font-size:0.8rem; color:#666'>${s.lastTime.toLocaleTimeString()}</span>
                             </div>
-                            <table>
-                                <tr>
-                                    <th>Metric</th><th>Min</th><th>Max</th><th>Last</th>
-                                    <th style='text-align:center'>Count</th>
-                                    <th style='text-align:center; background:#f0f9ff'>Last Result</th>
-                                </tr>
-                                <tr>
-                                    <td>Memory</td>
-                                    <td>${formatBytes(s.memMin)}</td><td>${formatBytes(s.memMax)}</td><td>${formatBytes(s.memLast)}</td>
-                                    <td rowspan='2' style='vertical-align:middle; text-align:center; font-size:1.2rem; font-weight:bold; border-left:1px solid #eee'>${s.count}</td>
-                                    <td rowspan='2' class='result-cell'>${s.lastResult}</td>
-                                </tr>
-                                <tr>
-                                    <td>Handles</td>
-                                    <td>${s.hndMin}</td><td>${s.hndMax}</td><td>${s.hndLast}</td>
-                                </tr>
-                            </table>
+                            <div class='table-wrapper'>
+                                <table>
+                                    <tr>
+                                        <th>Metric</th><th>Min</th><th>Max</th><th>Last</th>
+                                        <th style='text-align:center'>Total Calls</th>
+                                        <th style='text-align:center; background:#f0f9ff'>Last Sum</th>
+                                    </tr>
+                                    <tr>
+                                        <td>Memory</td>
+                                        <td>${formatBytes(s.memMin)}</td><td>${formatBytes(s.memMax)}</td><td>${formatBytes(s.memLast)}</td>
+                                        <td rowspan='2' style='vertical-align:middle; text-align:center; font-size:1.2rem; font-weight:bold; border-left:1px solid #eee'>${s.count}</td>
+                                        <td rowspan='2' class='result-cell'>${s.lastResult}</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Handles</td>
+                                        <td>${s.hndMin}</td><td>${s.hndMax}</td><td>${s.hndLast}</td>
+                                    </tr>
+                                </table>
+                            </div>
                         </div>
                     `;
                 }).join('');
 
-                // Update Errors
                 if (globalErrors.length > 0) {
                     errorBox.style.display = 'block';
-                    errorList.innerHTML = globalErrors.map(err => `<div class='error-item'>[${err.time}] Iteration ${err.iter}: ${err.msg}</div>`).join('');
+                    errorList.innerHTML = globalErrors.slice(-5).map(err => `<div class='error-item'>${err.msg}</div>`).join('');
                 } else {
                     errorBox.style.display = 'none';
                 }
             }
 
-            async function runIteration(engine, x, y, currentIter) {
+            async function runBatch(engine, x, y, batchSize) {
                 if (abortController.signal.aborted) return;
 
                 try {
-                    const formData = new URLSearchParams({ engine, x, y });
+                    const formData = new URLSearchParams({ engine, x, y, batchSize });
                     const response = await fetch('/calculate', { 
                         method: 'POST', 
                         body: formData,
@@ -192,77 +208,64 @@ app.MapGet("/", () =>
                     });
                     
                     const data = await response.json();
-                    
-                    if (!response.ok || !data.success) {
-                        throw new Error(data.detail || 'Server returned an error');
-                    }
+                    if (!response.ok || !data.success) throw new Error(data.detail || 'Server error');
 
-                    const comInfo = JSON.parse(data.engineJson);
-                    const pid = comInfo.pid;
-                    
-                    if (!processStats[pid]) {
-                        processStats[pid] = {
-                            engine: comInfo.engine,
-                            count: 0,
-                            lastResult: 0,
-                            firstSeen: performance.now(),
-                            lastTime: new Date(),
-                            memMin: Infinity, memMax: -Infinity, memLast: 0,
-                            hndMin: Infinity, hndMax: -Infinity, hndLast: 0
-                        };
-                    }
+                    // Data.results is an array of calculation items
+                    data.results.forEach(item => {
+                        const comInfo = JSON.parse(item.engineJson);
+                        const pid = comInfo.pid;
+                        
+                        document.getElementById('stat-host').innerText = data.hostPid;
 
-                    const s = processStats[pid];
-                    s.count++;
-                    s.lastResult = data.result;
-                    s.lastTime = new Date();
-                    s.memLast = comInfo.memoryBytes;
-                    if (s.memLast < s.memMin) s.memMin = s.memLast;
-                    if (s.memLast > s.memMax) s.memMax = s.memLast;
-                    s.hndLast = comInfo.handles.total;
-                    if (s.hndLast < s.hndMin) s.hndMin = s.hndLast;
-                    if (s.hndLast > s.hndMax) s.hndMax = s.hndLast;
+                        if (!processStats[pid]) {
+                            processStats[pid] = {
+                                engine: comInfo.engine, hostPid: data.hostPid, count: 0, lastResult: 0,
+                                firstSeen: performance.now(), lastTime: new Date(),
+                                memMin: Infinity, memMax: -Infinity, memLast: 0,
+                                hndMin: Infinity, hndMax: -Infinity, hndLast: 0
+                            };
+                        }
 
-                    document.getElementById('stat-engine').innerText = comInfo.engine;
+                        const s = processStats[pid];
+                        s.count++;
+                        s.lastResult = item.result;
+                        s.lastTime = new Date();
+                        s.memLast = comInfo.memoryBytes;
+                        if (s.memLast < s.memMin) s.memMin = s.memLast;
+                        if (s.memLast > s.memMax) s.memMax = s.memLast;
+                        s.hndLast = comInfo.handles.total;
+                        if (s.hndLast < s.hndMin) s.hndMin = s.hndLast;
+                        if (s.hndLast > s.hndMax) s.hndMax = s.hndLast;
+                        
+                        completedIters++;
+                    });
+
+                    document.getElementById('stat-iter').innerText = completedIters + '/' + totalTarget;
+                    updateDisplay();
                 } catch (err) {
                     if (err.name !== 'AbortError') {
-                        globalErrors.push({
-                            time: new Date().toLocaleTimeString(),
-                            iter: currentIter,
-                            msg: err.message
-                        });
+                        globalErrors.push({ time: new Date().toLocaleTimeString(), msg: err.message });
+                        updateDisplay();
                     }
-                } finally {
-                    completedIters++;
-                    document.getElementById('stat-iter').innerText = completedIters + '/' + targetIters;
-                    updateDisplay();
                 }
             }
 
-            document.getElementById('btn-cancel').onclick = () => {
-                if (abortController) abortController.abort();
-            };
+            document.getElementById('btn-cancel').onclick = () => { if (abortController) abortController.abort(); };
 
             document.getElementById('calcForm').onsubmit = async (e) => {
                 e.preventDefault();
-                
-                // Reset State
-                processStats = {};
-                globalErrors = [];
-                completedIters = 0;
-                targetIters = parseInt(document.getElementById('iters').value);
-                updateDisplay();
-
+                processStats = {}; globalErrors = []; completedIters = 0;
+                totalTarget = parseInt(document.getElementById('iters').value);
+                const batchSize = parseInt(document.getElementById('batchSize').value);
                 const concurrency = parseInt(document.getElementById('threads').value);
                 const engine = document.getElementById('engine').value;
                 const x = document.getElementById('x').value;
                 const y = document.getElementById('y').value;
 
-                const startBtn = document.getElementById('btn-start');
-                const cancelBtn = document.getElementById('btn-cancel');
+                updateDisplay();
+                document.getElementById('btn-start').disabled = true;
+                document.getElementById('btn-cancel').style.display = 'block';
                 
-                startBtn.disabled = true;
-                cancelBtn.style.display = 'block';
                 abortController = new AbortController();
                 startTime = performance.now();
                 
@@ -271,21 +274,16 @@ app.MapGet("/", () =>
                 }, 100);
 
                 try {
-                    let nextIterId = 1;
                     const workers = Array(concurrency).fill(0).map(async () => {
-                        while (nextIterId <= targetIters && !abortController.signal.aborted) {
-                            const current = nextIterId++;
-                            await runIteration(engine, x, y, current);
+                        while (completedIters < totalTarget && !abortController.signal.aborted) {
+                            await runBatch(engine, x, y, batchSize);
                         }
                     });
-
                     await Promise.all(workers);
-                } catch (err) {
-                    if (err.name !== 'AbortError') console.error(err);
                 } finally {
                     clearInterval(timerInterval);
-                    startBtn.disabled = false;
-                    cancelBtn.style.display = 'none';
+                    document.getElementById('btn-start').disabled = false;
+                    document.getElementById('btn-cancel').style.display = 'none';
                     abortController = null;
                 }
             };
@@ -303,25 +301,30 @@ app.MapPost("/calculate", async (HttpRequest request) =>
         var form = await request.ReadFormAsync();
         int x = int.Parse(form["x"]!);
         int y = int.Parse(form["y"]!);
+        int batchSize = int.Parse(form["batchSize"]!);
+        if(batchSize == 0) batchSize = 1;
         string engine = form["engine"]!;
 
         var activeProxy = engine == "delphi" ? proxyDelphi : proxyC;
+        var batchResults = new List<object>();
 
-        // Note: The Add method will throw if the sandbox process crashes 
-        // or a timeout occurs, which will be caught below.
-        var sum = activeProxy.Add(x, y);
-        var info = activeProxy.GetInfo(); 
+        // Execute calculations in a batch on the server
+        for (int i = 0; i < batchSize; i++)
+        {
+            var sum = activeProxy.Add(x, y);
+            var info = activeProxy.GetInfo();
+            batchResults.Add(new { Result = sum, EngineJson = info });
+        }
 
         return Results.Ok(new
         {
             Success = true,
-            Result = sum,
-            EngineJson = info
+            HostPid = Environment.ProcessId, // The PID of the ASP.NET Core process
+            Results = batchResults
         });
     }
     catch (Exception ex)
     {
-        // Return a 500 status code so the fetch.ok property becomes false
         return Results.Json(new { Success = false, detail = ex.Message }, statusCode: 500);
     }
 });
