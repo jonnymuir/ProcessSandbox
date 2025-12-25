@@ -90,7 +90,7 @@ public class ProcessPoolConfiguration
     /// Gets or sets the number of method calls before automatically recycling a worker.
     /// Set to 0 to disable call-count-based recycling.
     /// </summary>
-    public int ProcessRecycleThreshold { get; set; } = 1000;
+    public int ProcessRecycleThreshold { get; set; } = 0;
 
     /// <summary>
     /// Gets or sets the maximum lifetime of a worker process before recycling.

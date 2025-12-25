@@ -19,7 +19,6 @@ var poolConfigC = new ProcessPoolConfiguration
     DotNetVersion = DotNetVersion.Net48_32Bit,
     ComClsid = new Guid("11111111-2222-3333-4444-555555555555"),
     MaxMemoryMB = 1024,
-    ProcessRecycleThreshold = 20, 
     ImplementationAssemblyPath = Path.Combine(AppContext.BaseDirectory, "workers", "net48", "win-x86", "SimpleCom.dll")
 };
 
@@ -28,7 +27,6 @@ var poolConfigDelphi = new ProcessPoolConfiguration
     DotNetVersion = DotNetVersion.Net48_32Bit,
     ComClsid = new Guid("11111111-2222-3333-4444-555555555555"),
     MaxMemoryMB = 1024,
-    ProcessRecycleThreshold = 20,
     ImplementationAssemblyPath = Path.Combine(AppContext.BaseDirectory, "workers", "net48", "win-x86", "SimpleComDelphi.dll")
 };
 
