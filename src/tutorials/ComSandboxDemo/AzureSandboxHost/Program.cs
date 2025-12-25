@@ -3,6 +3,7 @@ using ProcessSandbox.Pool;
 using ProcessSandbox.Proxy;
 using System.Text.Json;
 using System.Diagnostics;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
@@ -67,8 +68,18 @@ app.MapGet("/", () =>
             th { text-align: left; padding: 10px; color: #888; border-bottom: 1px solid #eee; font-weight: 600; }
             td { padding: 10px; border-bottom: 1px solid #f9f9f9; }
             .result-cell { font-size: 1.5rem; font-weight: bold; color: #28a745; background: #f0f9ff; text-align: center; width: 100px; }
+            
             #error-box { margin-top: 20px; display: none; padding: 15px; background: #fff1f0; border: 1px solid #ffa39e; border-radius: 8px; }
-            .error-item { color: #cf1322; font-size: 0.8rem; font-family: monospace; margin-bottom: 4px; }
+            .error-item { 
+                color: #cf1322; 
+                font-size: 0.75rem; 
+                font-family: 'Consolas', monospace; 
+                margin-bottom: 10px; 
+                padding-bottom: 10px; 
+                border-bottom: 1px dashed #ffa39e; 
+                white-space: pre-wrap;
+                word-break: break-all;
+            }
         </style>
     </head>
     <body>
@@ -105,7 +116,7 @@ app.MapGet("/", () =>
                     <div>HOST PID: <span id='stat-host'>-</span></div>
                 </div>
                 <div id='error-box'>
-                    <h3 style='margin:0 0 10px 0; color:#cf1322; font-size:0.9rem;'>Errors</h3>
+                    <h3 style='margin:0 0 10px 0; color:#cf1322; font-size:0.9rem;'>Detailed Error Log</h3>
                     <div id='error-list'></div>
                 </div>
                 <div id='process-list'></div>
@@ -118,7 +129,7 @@ app.MapGet("/", () =>
             let globalErrors = [];
             let startTime = null;
             let completedIters = 0;
-            let sentIters = 0; // TRACK ISSUED TASKS
+            let sentIters = 0;
             let totalTarget = 0;
 
             function formatBytes(bytes) {
@@ -171,7 +182,11 @@ app.MapGet("/", () =>
 
                 if (globalErrors.length > 0) {
                     errorBox.style.display = 'block';
-                    errorList.innerHTML = globalErrors.slice(-3).map(err => `<div class='error-item'>${err.msg}</div>`).join('');
+                    errorList.innerHTML = globalErrors.slice(-5).map(err => `
+                        <div class='error-item'>
+                            <strong>[${err.time}]</strong> ${err.msg}
+                        </div>
+                    `).join('');
                 } else {
                     errorBox.style.display = 'none';
                 }
@@ -180,11 +195,9 @@ app.MapGet("/", () =>
             async function runBatch(engine, x, y, requestedBatchSize) {
                 if (abortController.signal.aborted) return;
 
-                // 1. CALCULATE REMAINING AT THE MOMENT OF SENDING
                 const remaining = totalTarget - sentIters;
                 if (remaining <= 0) return;
 
-                // 2. CLAIM THE BATCH IMMEDIATELY
                 const batchToRequest = Math.min(requestedBatchSize, remaining);
                 sentIters += batchToRequest; 
 
@@ -197,10 +210,20 @@ app.MapGet("/", () =>
                     });
                     
                     const data = await response.json();
-                    if (!response.ok || !data.success) throw new Error(data.detail || 'Server error');
+                    
+                    if (!response.ok || !data.success) {
+                        throw new Error(data.detail || 'Unknown Server Error');
+                    }
 
                     data.results.forEach(item => {
-                        const comInfo = JSON.parse(item.engineJson);
+                        // Validate JSON pattern to prevent 'string did not match expected pattern'
+                        let comInfo;
+                        try {
+                            comInfo = JSON.parse(item.engineJson);
+                        } catch(e) {
+                            throw new Error('Engine returned invalid JSON: ' + item.engineJson);
+                        }
+                        
                         const pid = comInfo.pid;
                         document.getElementById('stat-host').innerText = data.hostPid;
 
@@ -231,9 +254,10 @@ app.MapGet("/", () =>
                     updateDisplay();
                 } catch (err) {
                     if (err.name !== 'AbortError') {
-                        // If it fails, we technically 'un-claim' them or just log the error
-                        // For simplicity, we keep them as sent so the total count doesn't loop forever
-                        globalErrors.push({ msg: err.message });
+                        globalErrors.push({ 
+                            time: new Date().toLocaleTimeString(), 
+                            msg: err.message 
+                        });
                         updateDisplay();
                     }
                 }
@@ -262,7 +286,6 @@ app.MapGet("/", () =>
 
                 try {
                     const workers = Array(concurrency).fill(0).map(async () => {
-                        // Loop based on sentIters, not completedIters
                         while (sentIters < totalTarget && !abortController.signal.aborted) {
                             await runBatch(engine, x, y, batchSize);
                         }
@@ -314,8 +337,29 @@ app.MapPost("/calculate", async (HttpRequest request) =>
     }
     catch (Exception ex)
     {
-        return Results.Json(new { Success = false, detail = ex.Message }, statusCode: 500);
+        // Recursively capture message and stack trace
+        return Results.Json(new { 
+            Success = false, 
+            detail = FlattenException(ex) 
+        }, statusCode: 500);
     }
 });
+
+// Helper to get full stack trace and inner exceptions
+string FlattenException(Exception ex)
+{
+    var sb = new StringBuilder();
+    var current = ex;
+    int depth = 0;
+    while (current != null)
+    {
+        sb.AppendLine($"[Level {depth}] {current.GetType().Name}: {current.Message}");
+        sb.AppendLine(current.StackTrace);
+        sb.AppendLine(new string('-', 20));
+        current = current.InnerException;
+        depth++;
+    }
+    return sb.ToString();
+}
 
 app.Run();
