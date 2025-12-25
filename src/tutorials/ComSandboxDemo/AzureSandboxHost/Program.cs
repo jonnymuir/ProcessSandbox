@@ -46,41 +46,29 @@ app.MapGet("/", () =>
         <style>
             body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f2f5; margin: 0; padding: 10px; color: #333; }
             .container { max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: 320px 1fr; gap: 20px; }
-            
-            @media (max-width: 900px) {
-                .container { grid-template-columns: 1fr; }
-            }
-
+            @media (max-width: 900px) { .container { grid-template-columns: 1fr; } }
             .card { background: white; padding: 1.2rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); height: fit-content; }
             h2 { margin-top: 0; font-size: 1.1rem; border-bottom: 2px solid #eee; padding-bottom: 10px; }
-            
             label { display: block; font-size: 0.75rem; font-weight: bold; margin-top: 12px; color: #666; text-transform: uppercase; }
             input, select { width: 100%; padding: 10px; margin: 4px 0 8px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; font-size: 0.9rem; }
-            
             .btn-group { display: flex; gap: 10px; margin-top: 10px; }
             button { flex: 1; padding: 12px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; transition: all 0.2s; }
             #btn-start { background: #007bff; color: white; }
             #btn-start:disabled { background: #ccc; cursor: not-allowed; }
             #btn-cancel { background: #dc3545; color: white; display: none; }
-            
             .status-bar { background: #333; color: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: flex; flex-wrap: wrap; justify-content: space-between; font-family: monospace; font-size: 0.85rem; gap: 10px; }
             .status-bar span { color: #00d4ff; font-weight: bold; }
-            
             .process-group { margin-bottom: 15px; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; background: white; }
             .process-header { background: #f8f9fa; padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; flex-wrap: wrap; gap: 10px; }
-            
             .badge { padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; color: white; }
             .badge-worker { background: #007bff; }
             .badge-host { background: #6f42c1; }
             .badge-active { background: #28a745; box-shadow: 0 0 8px rgba(40,167,69,0.5); }
-            
             .table-wrapper { overflow-x: auto; }
             table { width: 100%; border-collapse: collapse; font-size: 0.8rem; min-width: 450px; }
             th { text-align: left; padding: 10px; color: #888; border-bottom: 1px solid #eee; font-weight: 600; }
             td { padding: 10px; border-bottom: 1px solid #f9f9f9; }
-            
             .result-cell { font-size: 1.5rem; font-weight: bold; color: #28a745; background: #f0f9ff; text-align: center; width: 100px; }
-            
             #error-box { margin-top: 20px; display: none; padding: 15px; background: #fff1f0; border: 1px solid #ffa39e; border-radius: 8px; }
             .error-item { color: #cf1322; font-size: 0.8rem; font-family: monospace; margin-bottom: 4px; }
         </style>
@@ -95,41 +83,33 @@ app.MapGet("/", () =>
                         <option value='c'>C (SimpleCom.dll)</option>
                         <option value='delphi'>Delphi (SimpleComDelphi.dll)</option>
                     </select>
-
                     <label>Concurrent Threads</label>
                     <input type='number' id='threads' value='2' min='1' max='20' />
-
                     <label>Batch Size (Calls per Req)</label>
                     <input type='number' id='batchSize' value='10' min='1' />
-
                     <label>Total Iterations</label>
                     <input type='number' id='iters' value='100' min='1' />
-
                     <label>Input Values (X, Y)</label>
                     <div style='display:flex; gap:10px'>
                         <input type='number' id='x' value='10' />
                         <input type='number' id='y' value='5' />
                     </div>
-                    
                     <div class='btn-group'>
                         <button type='submit' id='btn-start'>Start Run</button>
                         <button type='button' id='btn-cancel'>Cancel</button>
                     </div>
                 </form>
             </div>
-
             <div class='dashboard'>
                 <div class='status-bar'>
                     <div>COMPLETED: <span id='stat-iter'>0/0</span></div>
                     <div>ELAPSED: <span id='stat-time'>0.0s</span></div>
                     <div>HOST PID: <span id='stat-host'>-</span></div>
                 </div>
-                
                 <div id='error-box'>
                     <h3 style='margin:0 0 10px 0; color:#cf1322; font-size:0.9rem;'>Errors</h3>
                     <div id='error-list'></div>
                 </div>
-
                 <div id='process-list'></div>
             </div>
         </div>
@@ -140,6 +120,7 @@ app.MapGet("/", () =>
             let globalErrors = [];
             let startTime = null;
             let completedIters = 0;
+            let sentIters = 0; // TRACK ISSUED TASKS
             let totalTarget = 0;
 
             function formatBytes(bytes) {
@@ -198,13 +179,16 @@ app.MapGet("/", () =>
                 }
             }
 
-            async function runBatch(engine, x, y, requestedBatch) {
+            async function runBatch(engine, x, y, requestedBatchSize) {
                 if (abortController.signal.aborted) return;
 
-                // CRITICAL: Determine exact remaining to avoid overrun
-                const remaining = totalTarget - completedIters;
+                // 1. CALCULATE REMAINING AT THE MOMENT OF SENDING
+                const remaining = totalTarget - sentIters;
                 if (remaining <= 0) return;
-                const batchToRequest = Math.min(requestedBatch, remaining);
+
+                // 2. CLAIM THE BATCH IMMEDIATELY
+                const batchToRequest = Math.min(requestedBatchSize, remaining);
+                sentIters += batchToRequest; 
 
                 try {
                     const formData = new URLSearchParams({ engine, x, y, batchSize: batchToRequest });
@@ -249,6 +233,8 @@ app.MapGet("/", () =>
                     updateDisplay();
                 } catch (err) {
                     if (err.name !== 'AbortError') {
+                        // If it fails, we technically 'un-claim' them or just log the error
+                        // For simplicity, we keep them as sent so the total count doesn't loop forever
                         globalErrors.push({ msg: err.message });
                         updateDisplay();
                     }
@@ -257,7 +243,7 @@ app.MapGet("/", () =>
 
             document.getElementById('calcForm').onsubmit = async (e) => {
                 e.preventDefault();
-                processStats = {}; globalErrors = []; completedIters = 0;
+                processStats = {}; globalErrors = []; completedIters = 0; sentIters = 0;
                 totalTarget = parseInt(document.getElementById('iters').value);
                 const batchSize = parseInt(document.getElementById('batchSize').value);
                 const concurrency = parseInt(document.getElementById('threads').value);
@@ -278,7 +264,8 @@ app.MapGet("/", () =>
 
                 try {
                     const workers = Array(concurrency).fill(0).map(async () => {
-                        while (completedIters < totalTarget && !abortController.signal.aborted) {
+                        // Loop based on sentIters, not completedIters
+                        while (sentIters < totalTarget && !abortController.signal.aborted) {
                             await runBatch(engine, x, y, batchSize);
                         }
                     });
@@ -307,7 +294,7 @@ app.MapPost("/calculate", async (HttpRequest request) =>
         int x = int.Parse(form["x"]!);
         int y = int.Parse(form["y"]!);
         int batchSize = int.Parse(form["batchSize"]!);
-        if(batchSize == 0) batchSize = 1;
+        if(batchSize <= 0) batchSize = 1;
         string engine = form["engine"]!;
 
         var activeProxy = engine == "delphi" ? proxyDelphi : proxyC;
