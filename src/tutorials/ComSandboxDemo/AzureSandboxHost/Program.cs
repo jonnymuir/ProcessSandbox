@@ -2,6 +2,7 @@ using Contracts;
 using ProcessSandbox.Pool;
 using ProcessSandbox.Proxy;
 using System.Text.Json;
+using System.Diagnostics;
 
 var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
@@ -43,20 +44,18 @@ app.MapGet("/", () =>
         <title>COM Sandbox Dashboard</title>
         <meta name='viewport' content='width=device-width, initial-scale=1'>
         <style>
-            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f2f5; margin: 0; padding: 20px; color: #333; }
-            .container { max-width: 1100px; margin: 0 auto; display: grid; grid-template-columns: 350px 1fr; gap: 20px; }
+            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f2f5; margin: 0; padding: 10px; color: #333; }
+            .container { max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: 320px 1fr; gap: 20px; }
             
-            /* Mobile Responsiveness */
             @media (max-width: 900px) {
                 .container { grid-template-columns: 1fr; }
-                body { padding: 10px; }
             }
 
-            .card { background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); height: fit-content; }
-            h2 { margin-top: 0; font-size: 1.2rem; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+            .card { background: white; padding: 1.2rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); height: fit-content; }
+            h2 { margin-top: 0; font-size: 1.1rem; border-bottom: 2px solid #eee; padding-bottom: 10px; }
             
-            label { display: block; font-size: 0.8rem; font-weight: bold; margin-top: 15px; color: #666; }
-            input, select { width: 100%; padding: 10px; margin: 5px 0 10px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; }
+            label { display: block; font-size: 0.75rem; font-weight: bold; margin-top: 12px; color: #666; text-transform: uppercase; }
+            input, select { width: 100%; padding: 10px; margin: 4px 0 8px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; font-size: 0.9rem; }
             
             .btn-group { display: flex; gap: 10px; margin-top: 10px; }
             button { flex: 1; padding: 12px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; transition: all 0.2s; }
@@ -64,22 +63,26 @@ app.MapGet("/", () =>
             #btn-start:disabled { background: #ccc; cursor: not-allowed; }
             #btn-cancel { background: #dc3545; color: white; display: none; }
             
-            .status-bar { background: #333; color: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: flex; flex-wrap: wrap; justify-content: space-between; font-family: monospace; font-size: 0.9rem; gap: 10px; }
+            .status-bar { background: #333; color: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: flex; flex-wrap: wrap; justify-content: space-between; font-family: monospace; font-size: 0.85rem; gap: 10px; }
+            .status-bar span { color: #00d4ff; font-weight: bold; }
             
-            .process-group { margin-bottom: 15px; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; background: white; transition: all 0.3s ease; }
-            .process-header { background: #f8f9fa; padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; flex-wrap: wrap; gap: 5px; }
-            .pid-tag { background: #007bff; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; }
-            .host-tag { background: #6f42c1; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; }
-            .current-tag { background: #28a745; box-shadow: 0 0 8px rgba(40,167,69,0.4); }
+            .process-group { margin-bottom: 15px; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; background: white; }
+            .process-header { background: #f8f9fa; padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; flex-wrap: wrap; gap: 10px; }
+            
+            .badge { padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; color: white; }
+            .badge-worker { background: #007bff; }
+            .badge-host { background: #6f42c1; }
+            .badge-active { background: #28a745; box-shadow: 0 0 8px rgba(40,167,69,0.5); }
             
             .table-wrapper { overflow-x: auto; }
-            table { width: 100%; border-collapse: collapse; font-size: 0.85rem; min-width: 500px; }
-            th { text-align: left; padding: 8px 15px; color: #888; border-bottom: 1px solid #eee; }
-            td { padding: 8px 15px; border-bottom: 1px solid #f9f9f9; }
-            .result-cell { font-size: 1.4rem; font-weight: bold; color: #28a745; background: #f0f9ff; text-align: center; width: 100px; }
-
-            #error-box { margin-top: 20px; display: none; }
-            .error-item { background: #fff1f0; border: 1px solid #ffa39e; color: #cf1322; padding: 8px 12px; border-radius: 4px; margin-bottom: 5px; font-size: 0.85rem; font-family: monospace; }
+            table { width: 100%; border-collapse: collapse; font-size: 0.8rem; min-width: 450px; }
+            th { text-align: left; padding: 10px; color: #888; border-bottom: 1px solid #eee; font-weight: 600; }
+            td { padding: 10px; border-bottom: 1px solid #f9f9f9; }
+            
+            .result-cell { font-size: 1.5rem; font-weight: bold; color: #28a745; background: #f0f9ff; text-align: center; width: 100px; }
+            
+            #error-box { margin-top: 20px; display: none; padding: 15px; background: #fff1f0; border: 1px solid #ffa39e; border-radius: 8px; }
+            .error-item { color: #cf1322; font-size: 0.8rem; font-family: monospace; margin-bottom: 4px; }
         </style>
     </head>
     <body>
@@ -93,16 +96,16 @@ app.MapGet("/", () =>
                         <option value='delphi'>Delphi (SimpleComDelphi.dll)</option>
                     </select>
 
-                    <label>Client Threads</label>
+                    <label>Concurrent Threads</label>
                     <input type='number' id='threads' value='2' min='1' max='20' />
 
-                    <label>Server Batch Size (Calls per Request)</label>
-                    <input type='number' id='batchSize' value='10' min='1' max='100' />
+                    <label>Batch Size (Calls per Req)</label>
+                    <input type='number' id='batchSize' value='10' min='1' />
 
-                    <label>Target Total Iterations</label>
+                    <label>Total Iterations</label>
                     <input type='number' id='iters' value='100' min='1' />
 
-                    <label>Values (X + Y)</label>
+                    <label>Input Values (X, Y)</label>
                     <div style='display:flex; gap:10px'>
                         <input type='number' id='x' value='10' />
                         <input type='number' id='y' value='5' />
@@ -123,7 +126,7 @@ app.MapGet("/", () =>
                 </div>
                 
                 <div id='error-box'>
-                    <h3 style='color: #cf1322; font-size: 1rem;'>Errors Encountered</h3>
+                    <h3 style='margin:0 0 10px 0; color:#cf1322; font-size:0.9rem;'>Errors</h3>
                     <div id='error-list'></div>
                 </div>
 
@@ -140,9 +143,8 @@ app.MapGet("/", () =>
             let totalTarget = 0;
 
             function formatBytes(bytes) {
-                if (bytes === 0) return '0 B';
-                const mb = bytes / (1024 * 1024);
-                return mb.toFixed(2) + ' MB';
+                if (!bytes) return '0 B';
+                return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
             }
 
             function updateDisplay() {
@@ -159,23 +161,23 @@ app.MapGet("/", () =>
                         <div class='process-group'>
                             <div class='process-header'>
                                 <div>
-                                    <span class='pid-tag ${isActive ? 'current-tag' : ''}'>WORKER PID ${pid}</span>
-                                    <span class='host-tag'>HOST ${s.hostPid}</span>
+                                    <span class='badge badge-worker ${isActive ? 'badge-active' : ''}'>WORKER PID ${pid}</span>
+                                    <span class='badge badge-host'>HOST ${s.hostPid}</span>
                                     <strong>${s.engine}</strong>
                                 </div>
-                                <span style='font-size:0.8rem; color:#666'>${s.lastTime.toLocaleTimeString()}</span>
+                                <span style='font-size:0.75rem; color:#666'>${s.lastTime.toLocaleTimeString()}</span>
                             </div>
                             <div class='table-wrapper'>
                                 <table>
                                     <tr>
                                         <th>Metric</th><th>Min</th><th>Max</th><th>Last</th>
-                                        <th style='text-align:center'>Total Calls</th>
-                                        <th style='text-align:center; background:#f0f9ff'>Last Sum</th>
+                                        <th style='text-align:center'>Calls</th>
+                                        <th style='text-align:center; background:#f0f9ff'>Last Result</th>
                                     </tr>
                                     <tr>
                                         <td>Memory</td>
                                         <td>${formatBytes(s.memMin)}</td><td>${formatBytes(s.memMax)}</td><td>${formatBytes(s.memLast)}</td>
-                                        <td rowspan='2' style='vertical-align:middle; text-align:center; font-size:1.2rem; font-weight:bold; border-left:1px solid #eee'>${s.count}</td>
+                                        <td rowspan='2' style='vertical-align:middle; text-align:center; font-size:1.3rem; font-weight:bold; border-left:1px solid #eee'>${s.count}</td>
                                         <td rowspan='2' class='result-cell'>${s.lastResult}</td>
                                     </tr>
                                     <tr>
@@ -190,17 +192,22 @@ app.MapGet("/", () =>
 
                 if (globalErrors.length > 0) {
                     errorBox.style.display = 'block';
-                    errorList.innerHTML = globalErrors.slice(-5).map(err => `<div class='error-item'>${err.msg}</div>`).join('');
+                    errorList.innerHTML = globalErrors.slice(-3).map(err => `<div class='error-item'>${err.msg}</div>`).join('');
                 } else {
                     errorBox.style.display = 'none';
                 }
             }
 
-            async function runBatch(engine, x, y, batchSize) {
+            async function runBatch(engine, x, y, requestedBatch) {
                 if (abortController.signal.aborted) return;
 
+                // CRITICAL: Determine exact remaining to avoid overrun
+                const remaining = totalTarget - completedIters;
+                if (remaining <= 0) return;
+                const batchToRequest = Math.min(requestedBatch, remaining);
+
                 try {
-                    const formData = new URLSearchParams({ engine, x, y, batchSize });
+                    const formData = new URLSearchParams({ engine, x, y, batchSize: batchToRequest });
                     const response = await fetch('/calculate', { 
                         method: 'POST', 
                         body: formData,
@@ -210,11 +217,9 @@ app.MapGet("/", () =>
                     const data = await response.json();
                     if (!response.ok || !data.success) throw new Error(data.detail || 'Server error');
 
-                    // Data.results is an array of calculation items
                     data.results.forEach(item => {
                         const comInfo = JSON.parse(item.engineJson);
                         const pid = comInfo.pid;
-                        
                         document.getElementById('stat-host').innerText = data.hostPid;
 
                         if (!processStats[pid]) {
@@ -244,13 +249,11 @@ app.MapGet("/", () =>
                     updateDisplay();
                 } catch (err) {
                     if (err.name !== 'AbortError') {
-                        globalErrors.push({ time: new Date().toLocaleTimeString(), msg: err.message });
+                        globalErrors.push({ msg: err.message });
                         updateDisplay();
                     }
                 }
             }
-
-            document.getElementById('btn-cancel').onclick = () => { if (abortController) abortController.abort(); };
 
             document.getElementById('calcForm').onsubmit = async (e) => {
                 e.preventDefault();
@@ -287,6 +290,8 @@ app.MapGet("/", () =>
                     abortController = null;
                 }
             };
+
+            document.getElementById('btn-cancel').onclick = () => { if (abortController) abortController.abort(); };
         </script>
     </body>
     </html>";
@@ -308,7 +313,6 @@ app.MapPost("/calculate", async (HttpRequest request) =>
         var activeProxy = engine == "delphi" ? proxyDelphi : proxyC;
         var batchResults = new List<object>();
 
-        // Execute calculations in a batch on the server
         for (int i = 0; i < batchSize; i++)
         {
             var sum = activeProxy.Add(x, y);
@@ -319,7 +323,7 @@ app.MapPost("/calculate", async (HttpRequest request) =>
         return Results.Ok(new
         {
             Success = true,
-            HostPid = Environment.ProcessId, // The PID of the ASP.NET Core process
+            HostPid = Environment.ProcessId,
             Results = batchResults
         });
     }
