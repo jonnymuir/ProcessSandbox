@@ -62,7 +62,6 @@ var
   PID: DWORD;
   PMC: TProcessMemoryCounters;
   HandleCount: DWORD;
-  GdiHandles, UserHandles: Integer;
   WorkingSet: UInt64;
 begin
   PID := GetCurrentProcessID;
@@ -79,22 +78,14 @@ begin
   HandleCount := 0;
   GetProcessHandleCount(GetCurrentProcess, HandleCount);
 
-  // 3. GDI/User Objects (usually found in Windows/User32)
-  GdiHandles := GetGuiResources(GetCurrentProcess, 0);
-  UserHandles := GetGuiResources(GetCurrentProcess, 1);
-
   S := WideFormat(
     '{' +
     '"engine": "Running the manual Delphi FPC COM object",' +
     '"pid": %d,' +
     '"memoryBytes": %d,' +
-    '"handles": {' +
-      '"total": %d,' +
-      '"gdi": %d,' +
-      '"user": %d' +
-    '}' +
+    '"handles": %d' +
     '}',
-    [PID, WorkingSet, HandleCount, GdiHandles, UserHandles]
+    [PID, WorkingSet, HandleCount]
   );
 
   Result := SysAllocString(PWideChar(S));

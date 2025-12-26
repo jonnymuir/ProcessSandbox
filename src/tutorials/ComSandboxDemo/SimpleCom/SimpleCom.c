@@ -52,11 +52,6 @@ int __stdcall Add(void* this, int a, int b) {
     return a + b;
 }
 
-// Helper to get GDI/User handles
-int GetInternalGuiResources(int type) {
-    return GetGuiResources(GetCurrentProcess(), type);
-}
-
 BSTR __stdcall GetInfo(void* this) {
 // 1. Get Process ID
     DWORD pid = GetCurrentProcessId();
@@ -71,8 +66,6 @@ BSTR __stdcall GetInfo(void* this) {
     // 3. Get Handle Counts
     DWORD handleCount = 0;
     GetProcessHandleCount(GetCurrentProcess(), &handleCount);
-    int gdiHandles = GetInternalGuiResources(0);
-    int userHandles = GetInternalGuiResources(1);
 
     // 4. Construct JSON String (Wide Char for BSTR)
     wchar_t buffer[1024];
@@ -82,17 +75,11 @@ BSTR __stdcall GetInfo(void* this) {
         L"\"engine\": \"Running the native C COM object\","
         L"\"pid\": %u,"
         L"\"memoryBytes\": %u,"
-        L"\"handles\": {"
-            L"\"total\": %u,"
-            L"\"gdi\": %d,"
-            L"\"user\": %d"
-        L"}"
+        L"\"handles\": %u"
         L"}",
         (unsigned int)pid, 
         (unsigned int)workingSet, 
-        (unsigned int)handleCount, 
-        gdiHandles, 
-        userHandles
+        (unsigned int)handleCount 
     );
 
     return SysAllocString(buffer);

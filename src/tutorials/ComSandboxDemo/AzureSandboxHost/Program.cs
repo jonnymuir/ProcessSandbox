@@ -243,7 +243,7 @@ app.MapGet("/", () =>
                         s.memLast = comInfo.memoryBytes;
                         if (s.memLast < s.memMin) s.memMin = s.memLast;
                         if (s.memLast > s.memMax) s.memMax = s.memLast;
-                        s.hndLast = comInfo.handles.total;
+                        s.hndLast = comInfo.handles;
                         if (s.hndLast < s.hndMin) s.hndMin = s.hndLast;
                         if (s.hndLast > s.hndMax) s.hndMax = s.hndLast;
                         
