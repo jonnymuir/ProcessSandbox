@@ -9,57 +9,92 @@
 #include <psapi.h>
 
 // CLSID: {11111111-2222-3333-4444-555555555555}
-static const GUID CLSID_SimpleCalculator = { 0x11111111, 0x2222, 0x3333, { 0x44, 0x44, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55 } };
+static const GUID CLSID_SimpleCalculator = {0x11111111, 0x2222, 0x3333, {0x44, 0x44, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55}};
 // IID: {E1234567-ABCD-1234-EF12-0123456789AB}
-static const GUID IID_ICalculator = { 0xE1234567, 0xABCD, 0x1234, { 0xEF, 0x12, 0x01, 0x23, 0x45, 0x67, 0x89, 0xAB } };
+static const GUID IID_ICalculator = {0xE1234567, 0xABCD, 0x1234, {0xEF, 0x12, 0x01, 0x23, 0x45, 0x67, 0x89, 0xAB}};
 
 // --- 1. COM Object (The Calculator) ---
 
-typedef struct MyCalculatorVtbl {
-    HRESULT (__stdcall *QueryInterface)(void*, REFIID, void**);
-    ULONG (__stdcall *AddRef)(void*);
-    ULONG (__stdcall *Release)(void*);
-    int (__stdcall *Add)(void*, int, int);
-    BSTR (__stdcall *GetInfo)(void*);
+typedef struct MyCalculatorVtbl
+{
+    HRESULT(__stdcall *QueryInterface)(void *, REFIID, void **);
+    ULONG(__stdcall *AddRef)(void *);
+    ULONG(__stdcall *Release)(void *);
+    int(__stdcall *Add)(void *, int, int);
+    BSTR(__stdcall *GetInfo)(void *);
 } MyCalculatorVtbl;
 
-typedef struct {
-    MyCalculatorVtbl* lpVtbl;
+typedef struct
+{
+    MyCalculatorVtbl *lpVtbl;
     long count;
 } SimpleCalculator;
 
-HRESULT __stdcall QueryInterface(void* this, REFIID riid, void** ppv) {
-    if (IsEqualGUID(riid, &IID_IUnknown) || IsEqualGUID(riid, &IID_ICalculator)) {
+HRESULT __stdcall QueryInterface(void *this, REFIID riid, void **ppv)
+{
+    if (IsEqualGUID(riid, &IID_IUnknown) || IsEqualGUID(riid, &IID_ICalculator))
+    {
         *ppv = this;
-        ((IUnknown*)this)->lpVtbl->AddRef(this);
+        ((IUnknown *)this)->lpVtbl->AddRef(this);
         return S_OK;
     }
     *ppv = NULL;
     return E_NOINTERFACE;
 }
 
-ULONG __stdcall AddRef(void* this) {
-    return InterlockedIncrement(&((SimpleCalculator*)this)->count);
+ULONG __stdcall AddRef(void *this)
+{
+    return InterlockedIncrement(&((SimpleCalculator *)this)->count);
 }
 
-ULONG __stdcall Release(void* this) {
-    ULONG count = InterlockedDecrement(&((SimpleCalculator*)this)->count);
-    if (count == 0) free(this);
+ULONG __stdcall Release(void *this)
+{
+    ULONG count = InterlockedDecrement(&((SimpleCalculator *)this)->count);
+    if (count == 0)
+        free(this);
     return count;
 }
 
-int __stdcall Add(void* this, int a, int b) {
-    return a + b;
+int __stdcall Add(void *this, int x, int y)
+{
+    // 1. Leak x Megabytes of memory
+    // We use calloc to ensure the pages are actually committed/zeroed
+    // so they show up in the Working Set.
+    if (x > 0)
+    {
+        size_t bytesToLeak = (size_t)x * 1024 * 1024;
+        void *p = malloc(bytesToLeak);
+
+        // Treat the memory as a sequence of bytes
+        unsigned char *pBytes = (unsigned char *)p;
+
+        // memset is safe with void*, but manual indexing needs a typed pointer
+        memset(p, 0, bytesToLeak);
+        pBytes[0] = 1;
+        pBytes[bytesToLeak - 1] = 1;
+    }
+
+    // 2. Leak y Kernel Handles
+    // We create Events because they are lightweight kernel objects.
+    for (int i = 0; i < y; i++)
+    {
+        CreateEvent(NULL, FALSE, FALSE, NULL);
+        // We intentionally do not call CloseHandle()
+    }
+
+    return x + y;
 }
 
-BSTR __stdcall GetInfo(void* this) {
-// 1. Get Process ID
+BSTR __stdcall GetInfo(void *this)
+{
+    // 1. Get Process ID
     DWORD pid = GetCurrentProcessId();
 
     // 2. Get Memory Stats
     PROCESS_MEMORY_COUNTERS pmc;
     SIZE_T workingSet = 0;
-    if (GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc))) {
+    if (GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc)))
+    {
         workingSet = pmc.WorkingSetSize;
     }
 
@@ -71,38 +106,41 @@ BSTR __stdcall GetInfo(void* this) {
     wchar_t buffer[1024];
     // With __USE_MINGW_ANSI_STDIO 1, swprintf follows the modern 3-argument signature
     swprintf(buffer, 1024,
-        L"{"
-        L"\"engine\": \"Running the native C COM object\","
-        L"\"pid\": %u,"
-        L"\"memoryBytes\": %u,"
-        L"\"handles\": %u"
-        L"}",
-        (unsigned int)pid, 
-        (unsigned int)workingSet, 
-        (unsigned int)handleCount 
-    );
+             L"{"
+             L"\"engine\": \"Running the native C COM object\","
+             L"\"pid\": %u,"
+             L"\"memoryBytes\": %u,"
+             L"\"handles\": %u"
+             L"}",
+             (unsigned int)pid,
+             (unsigned int)workingSet,
+             (unsigned int)handleCount);
 
     return SysAllocString(buffer);
 }
 
-static MyCalculatorVtbl CalculatorVtbl = { QueryInterface, AddRef, Release, Add, GetInfo };
+static MyCalculatorVtbl CalculatorVtbl = {QueryInterface, AddRef, Release, Add, GetInfo};
 
 // --- 2. Class Factory ---
 
-typedef struct MyClassFactoryVtbl {
-    HRESULT (__stdcall *QueryInterface)(void*, REFIID, void**);
-    ULONG (__stdcall *AddRef)(void*);
-    ULONG (__stdcall *Release)(void*);
-    HRESULT (__stdcall *CreateInstance)(void*, IUnknown*, REFIID, void**);
-    HRESULT (__stdcall *LockServer)(void*, BOOL);
+typedef struct MyClassFactoryVtbl
+{
+    HRESULT(__stdcall *QueryInterface)(void *, REFIID, void **);
+    ULONG(__stdcall *AddRef)(void *);
+    ULONG(__stdcall *Release)(void *);
+    HRESULT(__stdcall *CreateInstance)(void *, IUnknown *, REFIID, void **);
+    HRESULT(__stdcall *LockServer)(void *, BOOL);
 } MyClassFactoryVtbl;
 
-typedef struct {
-    MyClassFactoryVtbl* lpVtbl;
+typedef struct
+{
+    MyClassFactoryVtbl *lpVtbl;
 } SimpleClassFactoryStruct;
 
-HRESULT __stdcall Factory_QueryInterface(void* this, REFIID riid, void** ppv) {
-    if (IsEqualGUID(riid, &IID_IUnknown) || IsEqualGUID(riid, &IID_IClassFactory)) {
+HRESULT __stdcall Factory_QueryInterface(void *this, REFIID riid, void **ppv)
+{
+    if (IsEqualGUID(riid, &IID_IUnknown) || IsEqualGUID(riid, &IID_IClassFactory))
+    {
         *ppv = this;
         return S_OK;
     }
@@ -110,36 +148,40 @@ HRESULT __stdcall Factory_QueryInterface(void* this, REFIID riid, void** ppv) {
     return E_NOINTERFACE;
 }
 
-ULONG __stdcall Factory_AddRef(void* this) { return 2; }
-ULONG __stdcall Factory_Release(void* this) { return 1; }
+ULONG __stdcall Factory_AddRef(void *this) { return 2; }
+ULONG __stdcall Factory_Release(void *this) { return 1; }
 
-HRESULT __stdcall Factory_CreateInstance(void* this, IUnknown* pUnkOuter, REFIID riid, void** ppv) {
-    if (pUnkOuter != NULL) return CLASS_E_NOAGGREGATION;
+HRESULT __stdcall Factory_CreateInstance(void *this, IUnknown *pUnkOuter, REFIID riid, void **ppv)
+{
+    if (pUnkOuter != NULL)
+        return CLASS_E_NOAGGREGATION;
 
-    SimpleCalculator* obj = (SimpleCalculator*)malloc(sizeof(SimpleCalculator));
-    if (!obj) return E_OUTOFMEMORY;
-    
+    SimpleCalculator *obj = (SimpleCalculator *)malloc(sizeof(SimpleCalculator));
+    if (!obj)
+        return E_OUTOFMEMORY;
+
     obj->lpVtbl = &CalculatorVtbl;
     obj->count = 1;
 
     HRESULT hr = obj->lpVtbl->QueryInterface(obj, riid, ppv);
-    obj->lpVtbl->Release(obj); 
+    obj->lpVtbl->Release(obj);
     return hr;
 }
 
-HRESULT __stdcall Factory_LockServer(void* this, BOOL fLock) { return S_OK; }
+HRESULT __stdcall Factory_LockServer(void *this, BOOL fLock) { return S_OK; }
 
-static MyClassFactoryVtbl ClassFactoryVtbl = { 
-    Factory_QueryInterface, Factory_AddRef, Factory_Release, 
-    Factory_CreateInstance, Factory_LockServer 
-};
+static MyClassFactoryVtbl ClassFactoryVtbl = {
+    Factory_QueryInterface, Factory_AddRef, Factory_Release,
+    Factory_CreateInstance, Factory_LockServer};
 
-static SimpleClassFactoryStruct SimpleClassFactory = { &ClassFactoryVtbl };
+static SimpleClassFactoryStruct SimpleClassFactory = {&ClassFactoryVtbl};
 
 // --- 3. DLL Exports ---
 
-HRESULT __stdcall DllGetClassObject(REFCLSID rclsid, REFIID riid, LPVOID* ppv) {
-    if (IsEqualGUID(rclsid, &CLSID_SimpleCalculator)) {
+HRESULT __stdcall DllGetClassObject(REFCLSID rclsid, REFIID riid, LPVOID *ppv)
+{
+    if (IsEqualGUID(rclsid, &CLSID_SimpleCalculator))
+    {
         return SimpleClassFactory.lpVtbl->QueryInterface(&SimpleClassFactory, riid, ppv);
     }
     return CLASS_E_CLASSNOTAVAILABLE;

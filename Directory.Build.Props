@@ -19,7 +19,7 @@
     <!--<PackageIcon>icon.png</PackageIcon>-->
     
     <!-- Version -->
-    <VersionPrefix>1.0.2</VersionPrefix>
+    <VersionPrefix>1.0.3</VersionPrefix>
     <VersionSuffix Condition="'$(Configuration)' == 'Debug'">dev</VersionSuffix>
     
     <!-- SourceLink -->

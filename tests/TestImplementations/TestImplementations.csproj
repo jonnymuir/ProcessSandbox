@@ -6,7 +6,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\ProcessSandbox.Abstractions\ProcessSandbox.Abstractions.csproj" />
+    <ProjectReference
+      Include="..\..\src\ProcessSandbox.Abstractions\ProcessSandbox.Abstractions.csproj" />
   </ItemGroup>
+
 
 </Project>

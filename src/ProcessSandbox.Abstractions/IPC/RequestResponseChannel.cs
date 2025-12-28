@@ -105,6 +105,11 @@ public class RequestResponseChannel : IDisposable
                 ChannelId);
             return await tcs.Task;
         }
+        catch (ObjectDisposedException ex)
+        {
+            // If the channel was disposed while we were waiting, it's a crash/failure state
+            throw new WorkerCrashedException("The communication channel was terminated before a result was received.", ex);
+        }
         finally
         {
             // Clear the request slot so the next call can proceed
@@ -128,7 +133,7 @@ public class RequestResponseChannel : IDisposable
 
         _logger.LogDebug("Closing RequestResponseChannel {ChannelId}", ChannelId);
 
-        while(!_currentRequest?.Task.IsCompleted ?? false)
+        while (!_currentRequest?.Task.IsCompleted ?? false)
         {
             await Task.Delay(50).ConfigureAwait(false);
         }

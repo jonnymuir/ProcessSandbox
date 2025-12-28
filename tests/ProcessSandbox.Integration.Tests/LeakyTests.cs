@@ -114,7 +114,7 @@ public class LeakyTests : IDisposable
             {
                 try
                 {
-                    if(proxy.Echo("memoryleak:50")=="memoryleak:50")
+                    if (proxy.Echo("memoryleak:50") == "memoryleak:50")
                     {
                         Interlocked.Increment(ref totalIterations);
                     }
@@ -129,6 +129,42 @@ public class LeakyTests : IDisposable
         }
         await Task.WhenAll(tasks);
         Assert.Equal(1000, totalIterations);
+    }
+
+    /// <summary>
+    /// Tests process crash resilience.
+    /// </summary>
+    /// <returns></returns>
+    [Fact]
+    public async Task ProcessCrashResilienceTest()
+    {
+        // Arrange
+        var config = new ProcessPoolConfiguration
+        {
+            MinPoolSize = 1,
+            MaxPoolSize = 1,
+            ImplementationAssemblyPath = _testAssemblyPath,
+            ImplementationTypeName = typeof(LeakyServiceImpl).FullName!,
+        };
+
+        var proxy = await ProcessProxy.CreateAsync<ITestService>(config, _loggerFactory);
+
+        // 1. Verify the crash is caught and reported correctly
+        // We expect a RemoteInvocationException (or your specific WorkerCrashedException)
+        var exception = await Assert.ThrowsAsync<WorkerCrashedException>(async () =>
+        {
+            // This call will trigger the 'unsafe' crash in the worker
+            await Task.Run(() => proxy.Echo("crash"));
+        });
+
+        // Check if the message indicates a process failure rather than a logical app error
+        Assert.Contains("terminated", exception.Message.ToLower());
+
+        // 2. Verify Self-Healing: The next call should work!
+        // The Pool should have detected the exit of the previous process and give us a fresh one.
+        string recoveryResult = proxy.Echo("I am alive");
+
+        Assert.Equal("I am alive", recoveryResult);
     }
 
 

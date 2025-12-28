@@ -121,13 +121,13 @@ public class WorkerProcess(ProcessPoolConfiguration config, ILogger<WorkerProces
                 fileName = Path.Combine(AppContext.BaseDirectory, "workers/net48/ProcessSandbox.Worker.exe");
                 arguments = $"--config {configBase64}";
             }
-            else if(config.DotNetVersion == DotNetVersion.Net48_32Bit)
+            else if (config.DotNetVersion == DotNetVersion.Net48_32Bit)
             {
-                 fileName = Path.Combine(AppContext.BaseDirectory, "workers/net48/win-x86/ProcessSandbox.Worker.exe");
+                fileName = Path.Combine(AppContext.BaseDirectory, "workers/net48/win-x86/ProcessSandbox.Worker.exe");
                 arguments = $"--config {configBase64}";
-               
+
             }
-            else if(config.DotNetVersion == DotNetVersion.Net8_0)
+            else if (config.DotNetVersion == DotNetVersion.Net8_0)
             {
                 // .NET 8.0
                 fileName = "dotnet";
@@ -265,18 +265,18 @@ public class WorkerProcess(ProcessPoolConfiguration config, ILogger<WorkerProces
         MethodInvocationMessage invocation,
         CancellationToken cancellationToken = default)
     {
-        
+
         logger.LogDebug(
             "Invoking method {MethodName} on worker {WorkerId}",
             invocation.MethodName,
             _workerId);
-            
+
         if (_disposed)
             throw new ObjectDisposedException(nameof(WorkerProcess));
 
         if (!IsHealthy)
             throw new WorkerCrashedException("Worker is not healthy");
-        
+
         await _usageLock.WaitAsync(cancellationToken);
         try
         {
@@ -296,7 +296,10 @@ public class WorkerProcess(ProcessPoolConfiguration config, ILogger<WorkerProces
         finally
         {
             IsBusy = false;
-            _usageLock.Release();
+            if (!_disposed)
+            {
+                _usageLock.Release();
+            }
         }
     }
 
@@ -316,7 +319,7 @@ public class WorkerProcess(ProcessPoolConfiguration config, ILogger<WorkerProces
 
         _recycleCount = 0;
         _lastCheckTime = DateTime.UtcNow;
-        
+
         logger.LogDebug("Checking if worker {WorkerId} should recycle", _workerId);
 
         // Check call count threshold
@@ -466,8 +469,16 @@ public class WorkerProcess(ProcessPoolConfiguration config, ILogger<WorkerProces
         {
             logger.LogWarning(ex, "Error killing worker process {WorkerId}", _workerId);
         }
+        await _usageLock.WaitAsync();
+        try
+        {
+            Cleanup();
+        }
+        finally
+        {
+            _usageLock.Release();
+        }
 
-        Cleanup();
     }
 
     private void OnProcessExited(object? sender, EventArgs e)
@@ -521,7 +532,7 @@ public class WorkerProcess(ProcessPoolConfiguration config, ILogger<WorkerProces
 
             try { _process.CancelOutputRead(); } catch { }
             try { _process.CancelErrorRead(); } catch { }
-            
+
             _process.Dispose();
             _process = null;
         }

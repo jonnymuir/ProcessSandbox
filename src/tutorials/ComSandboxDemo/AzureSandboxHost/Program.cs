@@ -315,7 +315,7 @@ app.MapPost("/calculate", async (HttpRequest request) =>
         int x = int.Parse(form["x"]!);
         int y = int.Parse(form["y"]!);
         int batchSize = int.Parse(form["batchSize"]!);
-        if(batchSize <= 0) batchSize = 1;
+        if (batchSize <= 0) batchSize = 1;
         string engine = form["engine"]!;
 
         var activeProxy = engine == "delphi" ? proxyDelphi : proxyC;
@@ -323,9 +323,29 @@ app.MapPost("/calculate", async (HttpRequest request) =>
 
         for (int i = 0; i < batchSize; i++)
         {
-            var sum = activeProxy.Add(x, y);
-            var info = activeProxy.GetInfo();
-            batchResults.Add(new { Result = sum, EngineJson = info });
+            try
+            {
+                var sum = activeProxy.Add(x, y);
+                var info = activeProxy.GetInfo();
+                batchResults.Add(new { Result = sum, EngineJson = info });
+            }
+            catch (Exception ex)
+            {
+                // THIS IS THE SANDBOX PROTECTING YOU
+                // The worker died mid-batch. We report it and stop the batch.
+                batchResults.Add(new
+                {
+                    Result = "CRASH",
+                    EngineJson = JsonSerializer.Serialize(new
+                    {
+                        engine,
+                        pid = -1,
+                        memoryBytes = 0,
+                        handles = 0,
+                        error = FlattenException(ex)
+                    })
+                });
+            }
         }
 
         return Results.Ok(new
@@ -338,9 +358,10 @@ app.MapPost("/calculate", async (HttpRequest request) =>
     catch (Exception ex)
     {
         // Recursively capture message and stack trace
-        return Results.Json(new { 
-            Success = false, 
-            detail = FlattenException(ex) 
+        return Results.Json(new
+        {
+            Success = false,
+            detail = FlattenException(ex)
         }, statusCode: 500);
     }
 });

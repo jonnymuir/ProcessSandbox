@@ -271,20 +271,27 @@ public class LeakyServiceImpl : ITestService
     /// <returns></returns>
     public string Echo(string input)
     {
+        if (input == "crash")
+        {
+            // Environment.FailFast bypasses all try/catch/finally blocks 
+            // and terminates the process immediately.
+            Environment.FailFast("Simulating a native crash for sandbox testing.");
+        }
+
         // Parse input - can be in format "text" or "text:megabytes"
         var parts = input.Split(':', 2);
-        if (parts.Length == 2 && parts[0]=="memoryleak" && int.TryParse(parts[1], out var mb) && mb > 0)
+        if (parts.Length == 2 && parts[0] == "memoryleak" && int.TryParse(parts[1], out var mb) && mb > 0)
         {
             // Allocate unmanaged memory to simulate a heavy leak
             var data = new byte[mb * 1024 * 1024];
-            
+
             // Fill it so it actually commits to RAM
             new Random().NextBytes(data);
-            
+
             // Add to static list so GC cannot collect it
-            _memoryHog.Add(data); 
+            _memoryHog.Add(data);
         }
-        
+
         return $"{input}";
     }
 
