@@ -98,7 +98,7 @@ begin
       if not Recordset.EOF then
       begin
         Response := Format(
-          'status: success", user: %s, database: %s, engine"',
+          'status: success, user: %s, database: %s',
           [string(Recordset.Fields['CurrentUser'].Value), 
            string(Recordset.Fields['CurrentDB'].Value)]
         );
