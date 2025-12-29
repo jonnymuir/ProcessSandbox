@@ -40,14 +40,20 @@ jobs:
             Write-Error "Installer failed with exit code $($process.ExitCode)"
             exit 1
         }
+        
+        Write-Host "--- Debug: Listing C:\fpc contents ---"
+        Get-ChildItem -Path C:\fpc -Recurse -Depth 2 | Select-Object FullName
+        
+        # We search for fpc.exe dynamically to avoid hardcoding a wrong path
+        $fpcExe = Get-ChildItem -Path C:\fpc -Filter "fpc.exe" -Recurse | Select-Object -First 1
 
-        $fpcPath = "C:\fpc\bin\x86_64-win64"
-        if (Test-Path "$fpcPath\fpc.exe") {
+        if ($fpcExe) {
+            $fpcPath = $fpcExe.DirectoryName
             Add-Content -Path $env:GITHUB_PATH -Value $fpcPath
             $env:Path += ";$fpcPath"
-            Write-Host "FPC installed successfully at $fpcPath"
+            Write-Host "FPC found and added to path: $fpcPath"
         } else {
-            Write-Error "fpc.exe not found at $fpcPath after installation."
+            Write-Error "fpc.exe not found anywhere under C:\fpc"
             exit 1
         }
         
