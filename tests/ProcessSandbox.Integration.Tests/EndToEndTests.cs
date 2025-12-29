@@ -44,9 +44,9 @@ public class EndToEndTests : IDisposable
     [Fact]
     public async Task Proxy_BasicMethodInvocation_ReturnsCorrectResult()
     {
-        
+
         _loggerFactory.CreateLogger<EndToEndTests>().LogInformation("Starting Proxy_BasicMethodInvocation_ReturnsCorrectResult test.");
-        
+
         // Arrange
         var config = CreateTestConfiguration(typeof(TestServiceImpl));
 
@@ -119,10 +119,10 @@ public class EndToEndTests : IDisposable
     public async Task Proxy_ConcurrentInvocations_HandlesCorrectly()
     {
         int numberOfTasks = 10;
-        
+
         var logger = _loggerFactory.CreateLogger<EndToEndTests>();
         logger.LogInformation("Starting Proxy_ConcurrentInvocations_HandlesCorrectly test.");
-        
+
         // Arrange
         var config = CreateTestConfiguration(typeof(TestServiceImpl));
         config.MaxPoolSize = 3;
@@ -171,6 +171,41 @@ public class EndToEndTests : IDisposable
 
         // Assert
         Assert.Equal(new byte[] { 2, 3, 4, 5, 6 }, result);
+    }
+
+    /// <summary>
+    /// Tests C# COM object with chained dependencies without registry.
+    /// </summary>
+    /// <returns></returns>
+    [ProcessSandbox.Integration.Tests.WindowsFact]
+    public async Task Proxy_CSharpComChained_WorksWithoutRegistry()
+    {
+        // Arrange
+        var config = new ProcessPoolConfiguration
+        {
+            MinPoolSize = 1,
+            MaxPoolSize = 1,
+            // We use the current test assembly as the "host"
+            ImplementationAssemblyPath = typeof(PrimaryService).Assembly.Location,
+            ImplementationTypeName = typeof(PrimaryService).FullName!,
+            ComClsid = new Guid("11111111-1111-1111-1111-111111111111"),
+            // Flattened dependencies for the secondary object
+            ExtraComDependencies =
+            [
+                new() {
+                    DllPath = typeof(InternalEngine).Assembly.Location!,
+                    Clsid = new Guid("22222222-2222-2222-2222-222222222222")
+                }
+            ],
+            MaxMemoryMB = 512
+        };
+
+        // Act
+        var proxy = await ProcessProxy.CreateAsync<IPrimaryService>(config, _loggerFactory);
+        var result = proxy.GetCombinedReport();
+
+        // Assert
+        Assert.Equal("Primary reporting: C# Internal Engine Active", result);
     }
 
     private ProcessPoolConfiguration CreateTestConfiguration(Type implementationType)

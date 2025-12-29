@@ -28,20 +28,18 @@ var poolConfigDelphi32 = new ProcessPoolConfiguration
     DotNetVersion = DotNetVersion.Net48_32Bit,
     ComClsid = new Guid("11111111-2222-3333-4444-555555555555"),
     MaxMemoryMB = 1024,
-    ImplementationAssemblyPath = Path.Combine(AppContext.BaseDirectory, "workers", "SimpleComDelphi32.dll")
-};
-
-var poolConfigDelphi64 = new ProcessPoolConfiguration
-{
-    DotNetVersion = DotNetVersion.Net10_0,
-    ComClsid = new Guid("11111111-2222-3333-4444-555555555555"),
-    MaxMemoryMB = 1024,
-    ImplementationAssemblyPath = Path.Combine(AppContext.BaseDirectory, "workers", "SimpleComDelphi64.dll")
+    ImplementationAssemblyPath = Path.Combine(AppContext.BaseDirectory, "workers", "SimpleComDelphi32.dll"),
+    ExtraComDependencies = [
+        new ComDependency
+        {
+            Clsid = new Guid("B1E9D2C4-8A6F-4E2B-9D3D-1234567890AB"),
+            DllPath = Path.Combine(AppContext.BaseDirectory, "workers", "ComEngineInfo32.dll")
+        }
+    ]
 };
 
 var proxyC = await ProcessProxy.CreateAsync<ICalculator>(poolConfigC, loggerFactory);
 var proxyDelphi32 = await ProcessProxy.CreateAsync<ICalculator>(poolConfigDelphi32, loggerFactory);
-//var proxyDelphi64 = await ProcessProxy.CreateAsync<ICalculator>(poolConfigDelphi64, loggerFactory);
 
 app.MapGet("/", () =>
 {
@@ -100,7 +98,6 @@ app.MapGet("/", () =>
                     <select id='engine'>
                         <option value='c'>C 32bit (SimpleCom.dll)</option>
                         <option value='delphi32'>Delphi 32bit (SimpleComDelphi32.dll)</option>
-                        <!-- <option value='delphi64'>Delphi 64bit (SimpleComDelphi64.dll)</option> -->
                     </select>
                     <label>Concurrent Threads</label>
                     <input type='number' id='threads' value='2' min='1' max='20' />

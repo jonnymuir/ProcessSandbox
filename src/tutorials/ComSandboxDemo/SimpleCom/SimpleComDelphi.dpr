@@ -68,10 +68,24 @@ var
   ConnStr: string;
   User: string;
   Pass: string;
+  EngineObj: OleVariant;
+  EngineMsg: string;
+const
+  CLASS_ComEngineInfo: TGUID = '{B1E9D2C4-8A6F-4E2B-9D3D-1234567890AB}';
 begin
 
   // Example of calling out to com objects
   CoInitialize(nil);
+
+  try
+    EngineObj := CreateComObject(CLASS_ComEngineInfo); 
+    EngineMsg := EngineObj.GetEngineName;
+  except
+    on E: Exception do
+      EngineMsg := 'Engine Link Failed: ' + E.Message;
+  end;
+
+
   try
     try
       Connection := CreateOleObject('ADODB.Connection');
@@ -133,12 +147,12 @@ begin
 
   S := WideFormat(
     '{' +
-    '"engine": "Running the manual Delphi FPC COM object. DB Result: %s",' +
+    '"engine": "Running Delphi FPC COM object. Sub Com Message: %s, DB Result: %s",' +
     '"pid": %d,' +
     '"memoryBytes": %d,' +
     '"handles": %d' +
     '}',
-    [Response, PID, WorkingSet, HandleCount]
+    [EngineMsg, Response, PID, WorkingSet, HandleCount]
   );
 
   Result := SysAllocString(PWideChar(S));

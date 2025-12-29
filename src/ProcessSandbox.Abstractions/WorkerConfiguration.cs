@@ -43,6 +43,13 @@ public class WorkerConfiguration
     /// </summary>
     [Key(5)]
     public Guid ComClsid { get; set; }
+    
+    
+    /// <summary>
+    /// Extra COM dependencies to register in the worker process (comma separated "DLLPath:CLSID").
+    /// </summary>
+    [Key(6)]
+    public string ExtraComDependencies { get; set; } = string.Empty;
 
     /// <summary>
     /// Validates the configuration.

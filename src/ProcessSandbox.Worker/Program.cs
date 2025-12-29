@@ -21,7 +21,7 @@ try
     var configBase64 = args[1];
     var configBytes = Convert.FromBase64String(configBase64);
     var config = MessagePack.MessagePackSerializer.Deserialize<WorkerConfiguration>(configBytes);
-    
+
     // Validate configuration
     config.Validate();
 
@@ -38,9 +38,27 @@ try
     logger.LogInformation("Type: {Type}", config.TypeName);
     logger.LogInformation("Pipe: {Pipe}", config.PipeName);
 
+    if (!string.IsNullOrWhiteSpace(config.ExtraComDependencies))
+    {
+        foreach (var entry in config.ExtraComDependencies.Split(';'))
+        {
+            var parts = entry.Split('|');
+            if (parts.Length == 2)
+            {
+                string dllPath = parts[0];
+                if (Guid.TryParse(parts[1], out Guid clsid))
+                {
+                    logger.LogInformation("In-Memory Registering: {Dll} [{Guid}]", dllPath, clsid);
+                    using var comReg = new ManualComRegistration();
+                    comReg.RegisterDll(dllPath, clsid);
+                }
+            }
+        }
+    }
+
     // Create and run worker host
     using var workerHost = new WorkerHost(config, loggerFactory);
-    
+
     // Monitor parent process
     _ = Task.Run(async () =>
     {
@@ -53,12 +71,12 @@ try
             while (!cts.Token.IsCancellationRequested)
             {
                 parent.Refresh();
-                
+
                 // If parent exited OR PID was recycled (StartTime changed)
                 if (parent.HasExited || parent.StartTime != parentStartTime)
                 {
                     logger.LogCritical("Parent process {Pid} lost. Emergency shutdown.", config.ParentProcessId);
-                    Environment.Exit(0); 
+                    Environment.Exit(0);
                 }
 
                 await Task.Delay(2000, cts.Token);
@@ -74,7 +92,7 @@ try
 
     // Run the worker (blocks until shutdown)
     await workerHost.RunAsync();
-    
+
     logger.LogInformation("Worker process exiting normally");
     return 0;
 }

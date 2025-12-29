@@ -26,6 +26,22 @@ public enum DotNetVersion
 }   
 
 /// <summary>
+/// COM dependency information.
+/// </summary>
+public class ComDependency
+{
+    /// <summary>
+    /// COM CLSID of the dependency.
+    /// </summary>
+    public Guid Clsid { get; set; }
+    
+    /// <summary>
+    /// Full path  of the COM DLL.
+    /// </summary>
+    public string DllPath { get; set; } = string.Empty;
+}
+
+/// <summary>
 /// Configuration options for the process pool.
 /// </summary>
 public class ProcessPoolConfiguration
@@ -65,6 +81,11 @@ public class ProcessPoolConfiguration
     /// COM CLSID of the native COM object to load (if applicable).
     /// </summary>
     public Guid ComClsid { get; set; }
+
+    /// <summary>
+    /// Gets or sets extra COM dependencies to register in each worker process.
+    /// </summary>
+    public List<ComDependency> ExtraComDependencies { get; set; } = [];
 
     /// <summary>
     /// Gets or sets the maximum memory usage in megabytes before recycling a worker.
@@ -121,6 +142,8 @@ public class ProcessPoolConfiguration
     /// Gets or sets the number of seconds between recycle checks.
     /// </summary>
     public int RecycleCheckSeconds { get; set; } = 10;
+
+    
 
     /// <summary>
     /// Validates the configuration and throws if invalid.

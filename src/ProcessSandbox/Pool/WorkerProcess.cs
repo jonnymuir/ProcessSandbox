@@ -102,6 +102,8 @@ public class WorkerProcess(ProcessPoolConfiguration config, ILogger<WorkerProces
                 AssemblyPath = config.ImplementationAssemblyPath,
                 TypeName = config.ImplementationTypeName,
                 ComClsid = config.ComClsid,
+                ExtraComDependencies = string.Join(";", config.ExtraComDependencies
+                    .Select(d => $"{d.DllPath}|{d.Clsid}")),
                 PipeName = pipeName,
                 VerboseLogging = config.VerboseWorkerLogging,
                 ParentProcessId = currentProcessId
