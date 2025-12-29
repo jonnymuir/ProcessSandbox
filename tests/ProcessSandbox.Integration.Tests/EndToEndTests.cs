@@ -194,7 +194,7 @@ public class EndToEndTests : IDisposable
             [
                 new() {
                     DllPath = typeof(InternalEngine).Assembly.Location!,
-                    Clsid = new Guid("22222222-2222-2222-2222-222222222222")
+                    Clsid = new Guid("33333333-3333-3333-3333-333333333333")
                 }
             ],
             MaxMemoryMB = 512

@@ -65,7 +65,7 @@ public class PrimaryService : IPrimaryService
         // This simulates the Delphi "CreateOleObject" call
         // Because we register the InternalEngine in the worker process memory,
         // this standard Activator call will find it.
-        var engineType = Type.GetTypeFromCLSID(new Guid("22222222-2222-2222-2222-222222222222"));
+        var engineType = Type.GetTypeFromCLSID(new Guid("33333333-3333-3333-3333-333333333333"));
         var engine = (IInternalEngine)Activator.CreateInstance(engineType!)!;
         return $"Primary reporting: {engine!.GetStatus()}";
     }
