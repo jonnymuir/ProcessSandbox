@@ -93,7 +93,7 @@ begin
       if not Recordset.EOF then
       begin
         Response := Format(
-          '{"status": "success", "user": "%s", "database": "%s", "engine": "FPC/Lazarus"}',
+          'status: success", user: %s, database: %s, engine"',
           [string(Recordset.Fields['CurrentUser'].Value), 
            string(Recordset.Fields['CurrentDB'].Value)]
         );
@@ -101,7 +101,7 @@ begin
 
     except
       on E: Exception do
-        Response := Format('{"status": "error", "message": "%s"}', [E.Message]);
+        Response := Format('status: error, message: %s', [E.Message]);
     end;
   finally
     // 5. Cleanup
@@ -128,7 +128,7 @@ begin
 
   S := WideFormat(
     '{' +
-    '"engine": "Running the manual Delphi FPC COM object. DBQuery: %s",' +
+    '"engine": "Running the manual Delphi FPC COM object. DB Result: %s",' +
     '"pid": %d,' +
     '"memoryBytes": %d,' +
     '"handles": %d' +
