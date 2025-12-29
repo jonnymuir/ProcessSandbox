@@ -50,11 +50,15 @@ public class ManualComRegistration : IDisposable
         // Load the assembly and find the type decorated with the matching GUID
         var assembly = Assembly.LoadFrom(dllPath);
         var type = assembly.GetTypes().FirstOrDefault(t =>
+            t.IsClass && 
+            !t.IsAbstract &&
             t.GetCustomAttribute<GuidAttribute>()?.Value.Equals(clsid.ToString(), StringComparison.OrdinalIgnoreCase) == true);
 
         if (type == null)
+        {
             throw new Exception($"Could not find a managed type with CLSID {clsid} in {dllPath}");
-
+        }
+        
         // Create an instance. .NET automatically provides the ClassFactory plumbing 
         // when we pass a managed object to CoRegisterClassObject.
         object instance = Activator.CreateInstance(type)
