@@ -32,7 +32,7 @@ jobs:
     
     - name: Install Free Pascal (Manual Portable)
       run: |
-        curl.exe -L "https://downloads.sourceforge.net/project/freepascal/Win32/3.2.2/fpc-3.2.2.x86_64-win64.exe" -o fpc_setup.exe
+        curl.exe -L "https://downloads.sourceforge.net/project/freepascal/Win32/3.2.2/fpc-3.2.2.win32.and.win64.exe" -o fpc_setup.exe
 
         Write-Host "Installing FPC..."
         $process = Start-Process .\fpc_setup.exe -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR=C:\fpc" -Wait -PassThru
