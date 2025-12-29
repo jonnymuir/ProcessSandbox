@@ -75,10 +75,10 @@ begin
       Connection := CreateOleObject('ADODB.Connection');
       
       // Connection string for Entra Managed Identity
-      ConnStr := 'Provider=MSOLEDBSQL;' +
+      ConnStr := 'Provider=SQLNCLI11;' +
                  'Data Source=com-sandbox.database.windows.net;' +
                  'Initial Catalog=free-sql-db-3575767;' +
-                 'Authentication=ActiveDirectoryMSI;' +
+                 'Authentication=ActiveDirectoryIntegrated;' +
                  'Encrypt=yes;' +
                  'TrustServerCertificate=no;';
 

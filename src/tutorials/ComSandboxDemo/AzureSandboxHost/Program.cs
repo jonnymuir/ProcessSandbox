@@ -23,7 +23,15 @@ var poolConfigC = new ProcessPoolConfiguration
     ImplementationAssemblyPath = Path.Combine(AppContext.BaseDirectory, "workers", "net48", "win-x86", "SimpleCom.dll")
 };
 
-var poolConfigDelphi = new ProcessPoolConfiguration
+var poolConfigDelphi32 = new ProcessPoolConfiguration
+{
+    DotNetVersion = DotNetVersion.Net48_32Bit,
+    ComClsid = new Guid("11111111-2222-3333-4444-555555555555"),
+    MaxMemoryMB = 1024,
+    ImplementationAssemblyPath = Path.Combine(AppContext.BaseDirectory, "workers", "SimpleComDelphi32.dll")
+};
+
+var poolConfigDelphi64 = new ProcessPoolConfiguration
 {
     DotNetVersion = DotNetVersion.Net10_0,
     ComClsid = new Guid("11111111-2222-3333-4444-555555555555"),
@@ -32,7 +40,8 @@ var poolConfigDelphi = new ProcessPoolConfiguration
 };
 
 var proxyC = await ProcessProxy.CreateAsync<ICalculator>(poolConfigC, loggerFactory);
-var proxyDelphi = await ProcessProxy.CreateAsync<ICalculator>(poolConfigDelphi, loggerFactory);
+var proxyDelphi32 = await ProcessProxy.CreateAsync<ICalculator>(poolConfigDelphi32, loggerFactory);
+//var proxyDelphi64 = await ProcessProxy.CreateAsync<ICalculator>(poolConfigDelphi64, loggerFactory);
 
 app.MapGet("/", () =>
 {
@@ -89,8 +98,9 @@ app.MapGet("/", () =>
                 <form id='calcForm'>
                     <label>Engine</label>
                     <select id='engine'>
-                        <option value='c'>C (SimpleCom.dll)</option>
-                        <option value='delphi'>Delphi (SimpleComDelphi.dll)</option>
+                        <option value='c'>C 32bit (SimpleCom.dll)</option>
+                        <option value='delphi32'>Delphi 32bit (SimpleComDelphi32.dll)</option>
+                        <!-- <option value='delphi64'>Delphi 64bit (SimpleComDelphi64.dll)</option> -->
                     </select>
                     <label>Concurrent Threads</label>
                     <input type='number' id='threads' value='2' min='1' max='20' />
@@ -318,7 +328,12 @@ app.MapPost("/calculate", async (HttpRequest request) =>
         if (batchSize <= 0) batchSize = 1;
         string engine = form["engine"]!;
 
-        var activeProxy = engine == "delphi" ? proxyDelphi : proxyC;
+        ICalculator activeProxy = engine switch
+        {
+            "delphi32" => proxyDelphi32,
+            _ => proxyC
+        };
+
         var batchResults = new List<object>();
 
         for (int i = 0; i < batchSize; i++)

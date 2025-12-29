@@ -61,7 +61,6 @@ jobs:
     - name: Build Delphi Objects
       run: |
         fpc -Pi386 -Mdelphi -O2 src/tutorials/ComSandboxDemo/SimpleCom/SimpleComDelphi.dpr
-        $dest = "${{ github.workspace }}\artifacts\native"        
         mkdir -p ${{ github.workspace }}/artifacts/native
         move src\tutorials\ComSandboxDemo\SimpleCom\SimpleComDelphi.dll ${{ github.workspace }}/artifacts/native/SimpleComDelphi32.dll    
         fpc -Px86_64 -Mdelphi -O2 src/tutorials/ComSandboxDemo/SimpleCom/SimpleComDelphi.dpr
