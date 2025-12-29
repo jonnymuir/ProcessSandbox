@@ -73,12 +73,15 @@ begin
   try
     try
       Connection := CreateOleObject('ADODB.Connection');
+      User := GetEnvironmentVariable('DB_USER');
+      Pass := GetEnvironmentVariable('DB_PASS');
       
       // Connection string for Entra Managed Identity
       ConnStr := 'Provider=SQLNCLI11;' +
                  'Data Source=com-sandbox.database.windows.net;' +
                  'Initial Catalog=free-sql-db-3575767;' +
-                 'Authentication=ActiveDirectoryIntegrated;' +
+                 'User ID=' + User + ';' +
+                 'Password=' + Pass + ';' +                 
                  'Encrypt=yes;' +
                  'TrustServerCertificate=no;';
 
