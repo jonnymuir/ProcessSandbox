@@ -63,7 +63,14 @@ jobs:
       run: |
         # -Pi386: Target 32-bit Intel
         # -Mdelphi: Use Delphi syntax mode
-        fpc -Pi386 -Mdelphi -O2 src/tutorials/ComSandboxDemo/SimpleCom/SimpleComDelphi.dpr
+        fpc -Pi386 -Mdelphi -O2 -osrc\tutorials\ComSandboxDemo\SimpleCom\SimpleComDelphi32.dll src/tutorials/ComSandboxDemo/SimpleCom/SimpleComDelphi.dpr
+
+    - name: Build Delphi COM Object (64-bit)
+      run: |
+        # -Px86_64: Target 64-bit Intel
+        # -Mdelphi: Use Delphi syntax mode
+        fpc -Px86_64 -Mdelphi -O2 -osrc\tutorials\ComSandboxDemo\SimpleCom\SimpleComDelphi64.dll src/tutorials/ComSandboxDemo/SimpleCom/SimpleComDelphi.dpr
+
 
 
     - name: Setup .NET
@@ -98,8 +105,10 @@ jobs:
       run: |
         # Create directory if it doesn't exist
         mkdir -p ${{ github.workspace }}/artifacts/native
-        move src\tutorials\ComSandboxDemo\SimpleCom\SimpleComDelphi.dll ${{ github.workspace }}/artifacts/native/    
-    
+        move src\tutorials\ComSandboxDemo\SimpleCom\SimpleComDelphi32.dll ${{ github.workspace }}/artifacts/native/    
+        move src\tutorials\ComSandboxDemo\SimpleCom\SimpleComDelphi64.dll ${{ github.workspace }}/artifacts/native/    
+
+
     - name: Upload nuget artifacts
       if: (github.ref == 'refs/heads/main') 
       uses: actions/upload-artifact@v4

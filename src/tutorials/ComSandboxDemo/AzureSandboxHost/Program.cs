@@ -25,10 +25,10 @@ var poolConfigC = new ProcessPoolConfiguration
 
 var poolConfigDelphi = new ProcessPoolConfiguration
 {
-    DotNetVersion = DotNetVersion.Net48_32Bit,
+    DotNetVersion = DotNetVersion.Net10_0,
     ComClsid = new Guid("11111111-2222-3333-4444-555555555555"),
     MaxMemoryMB = 1024,
-    ImplementationAssemblyPath = Path.Combine(AppContext.BaseDirectory, "workers", "net48", "win-x86", "SimpleComDelphi.dll")
+    ImplementationAssemblyPath = Path.Combine(AppContext.BaseDirectory, "workers", "SimpleComDelphi64.dll")
 };
 
 var proxyC = await ProcessProxy.CreateAsync<ICalculator>(poolConfigC, loggerFactory);
