@@ -63,7 +63,53 @@ var
   PMC: TProcessMemoryCounters;
   HandleCount: DWORD;
   WorkingSet: UInt64;
+  Connection: OleVariant;
+  Recordset: OleVariant;
+  DbResult: string;
+  ConnStr: string;
 begin
+
+  // Example of calling out to com objects
+  CoInitialize(nil);
+  try
+    try
+      // Create the ADO Connection Object via Late Binding
+      Connection := CreateOleObject('ADODB.Connection');
+      
+      // efine Connection String (Example: Access, SQL Server, or Excel)
+      // For this test, we'll use a local Access provider or DSN
+      ConnStr := 'Provider=Microsoft.ACE.OLEDB.12.0;Data Source=test.accdb;';
+      
+      // Note: If you don't have a DB file, we can simulate a result 
+      // or connect to a local SQL Express instance.
+      // Connection.Open(ConnStr); 
+
+      // Create Recordset and Run Query
+      Recordset := CreateOleObject('ADODB.Recordset');
+      
+      { 
+        Uncommenting the lines below would perform the actual DB hit:
+        Recordset.Open('SELECT TOP 1 SomeColumn FROM SomeTable', Connection);
+        if not Recordset.EOF then
+           DbResult := Recordset.Fields['SomeColumn'].Value;
+      }
+      
+      // For the sake of a "provable" COM call that doesn't crash without a DB file:
+      DbResult := 'ADO Version: ' + string(Connection.Version);
+
+    except
+      on E: Exception do
+        DbResult := 'ADO Error: ' + E.Message;
+    end;
+  finally
+    // 5. Cleanup
+    Recordset := Unassigned;
+    Connection := Unassigned;
+    CoUninitialize;
+  end;
+  // End example of calling out to com
+
+
   PID := GetCurrentProcessID;
   
   WorkingSet := 0;
@@ -80,12 +126,12 @@ begin
 
   S := WideFormat(
     '{' +
-    '"engine": "Running the manual Delphi FPC COM object",' +
+    '"engine": "Running the manual Delphi FPC COM object. DBQuery: %s",' +
     '"pid": %d,' +
     '"memoryBytes": %d,' +
     '"handles": %d' +
     '}',
-    [PID, WorkingSet, HandleCount]
+    [DbResult, PID, WorkingSet, HandleCount]
   );
 
   Result := SysAllocString(PWideChar(S));
