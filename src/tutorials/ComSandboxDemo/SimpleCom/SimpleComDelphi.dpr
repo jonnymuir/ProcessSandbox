@@ -63,9 +63,8 @@ var
   PMC: TProcessMemoryCounters;
   HandleCount: DWORD;
   WorkingSet: UInt64;
-  Connection: OleVariant;
-  Recordset: OleVariant;
-  DbResult: string;
+  Connection, Recordset: OleVariant;
+  Response: string;
   ConnStr: string;
 begin
 
@@ -73,33 +72,36 @@ begin
   CoInitialize(nil);
   try
     try
-      // Create the ADO Connection Object via Late Binding
       Connection := CreateOleObject('ADODB.Connection');
       
-      // efine Connection String (Example: Access, SQL Server, or Excel)
-      // For this test, we'll use a local Access provider or DSN
-      ConnStr := 'Provider=Microsoft.ACE.OLEDB.12.0;Data Source=test.accdb;';
-      
-      // Note: If you don't have a DB file, we can simulate a result 
-      // or connect to a local SQL Express instance.
-      // Connection.Open(ConnStr); 
+      // Connection string for Entra Managed Identity
+      ConnStr := 'Provider=MSOLEDBSQL;' +
+                 'Data Source=com-sandbox.database.windows.net;' +
+                 'Initial Catalog=free-sql-db-3575767;' +
+                 'Authentication=ActiveDirectoryMSI;' +
+                 'Encrypt=yes;' +
+                 'TrustServerCertificate=no;';
 
-      // Create Recordset and Run Query
+      Connection.ConnectionString := ConnStr;
+      Connection.ConnectionTimeout := 30;
+      Connection.Open;
+
+      // Run a query to prove who we are connected as
       Recordset := CreateOleObject('ADODB.Recordset');
+      Recordset.Open('SELECT SUSER_SNAME() as CurrentUser, DB_NAME() as CurrentDB', Connection);
       
-      { 
-        Uncommenting the lines below would perform the actual DB hit:
-        Recordset.Open('SELECT TOP 1 SomeColumn FROM SomeTable', Connection);
-        if not Recordset.EOF then
-           DbResult := Recordset.Fields['SomeColumn'].Value;
-      }
-      
-      // For the sake of a "provable" COM call that doesn't crash without a DB file:
-      DbResult := 'ADO Version: ' + string(Connection.Version);
+      if not Recordset.EOF then
+      begin
+        Response := Format(
+          '{"status": "success", "user": "%s", "database": "%s", "engine": "FPC/Lazarus"}',
+          [string(Recordset.Fields['CurrentUser'].Value), 
+           string(Recordset.Fields['CurrentDB'].Value)]
+        );
+      end;
 
     except
       on E: Exception do
-        DbResult := 'ADO Error: ' + E.Message;
+        Response := Format('{"status": "error", "message": "%s"}', [E.Message]);
     end;
   finally
     // 5. Cleanup
@@ -131,7 +133,7 @@ begin
     '"memoryBytes": %d,' +
     '"handles": %d' +
     '}',
-    [DbResult, PID, WorkingSet, HandleCount]
+    [Response, PID, WorkingSet, HandleCount]
   );
 
   Result := SysAllocString(PWideChar(S));
