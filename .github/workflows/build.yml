@@ -58,18 +58,14 @@ jobs:
         fpc -iV
       shell: pwsh  
 
-    - name: Build Delphi COM Object (32-bit)
+    - name: Build Delphi Objects
       run: |
-        # -Pi386: Target 32-bit Intel
-        # -Mdelphi: Use Delphi syntax mode
-        fpc -Pi386 -Mdelphi -O2 -osrc/tutorials/ComSandboxDemo/SimpleCom/SimpleComDelphi32.dll src/tutorials/ComSandboxDemo/SimpleCom/SimpleComDelphi.dpr
-
-    - name: Build Delphi COM Object (64-bit)
-      run: |
-        # -Px86_64: Target 64-bit Intel
-        # -Mdelphi: Use Delphi syntax mode
-        fpc -Px86_64 -Mdelphi -O2 -osrc/tutorials/ComSandboxDemo/SimpleCom/SimpleComDelphi64.dll src/tutorials/ComSandboxDemo/SimpleCom/SimpleComDelphi.dpr
-        Get-ChildItem src/tutorials/ComSandboxDemo/SimpleCom/
+        fpc -Pi386 -Mdelphi -O2 src/tutorials/ComSandboxDemo/SimpleCom/SimpleComDelphi.dpr
+        $dest = "${{ github.workspace }}\artifacts\native"        
+        mkdir -p ${{ github.workspace }}/artifacts/native
+        move src\tutorials\ComSandboxDemo\SimpleCom\SimpleComDelphi.dll ${{ github.workspace }}/artifacts/native/SimpleComDelphi32.dll    
+        fpc -Px86_64 -Mdelphi -O2 src/tutorials/ComSandboxDemo/SimpleCom/SimpleComDelphi.dpr
+        move src\tutorials\ComSandboxDemo\SimpleCom\SimpleComDelphi.dll ${{ github.workspace }}/artifacts/native/SimpleComDelphi64.dll
 
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
@@ -106,25 +102,9 @@ jobs:
         name: nuget-packages
         path: ${{ github.workspace }}\artifacts\*.nupkg
 
-    - name: Move Delphi DLL to artifacts
-      run: |
-        $dest = "${{ github.workspace }}\artifacts\native"
-        if (!(Test-Path $dest)) { New-Item -ItemType Directory -Force -Path $dest }
-        
-        $files = @(
-            "src/tutorials/ComSandboxDemo/SimpleCom/SimpleComDelphi32.dll",
-            "src/tutorials/ComSandboxDemo/SimpleCom/SimpleComDelphi64.dll"
-        )
-
-        foreach ($file in $files) {
-            if (Test-Path $file) {
-                Move-Item -Path $file -Destination $dest -Force
-                Write-Host "Successfully moved $file"
-            } else {
-                Write-Error "CRITICAL: $file was not found! The compiler likely failed silently."
-                # List the directory to see what FPC actually created
-                Get-ChildItem src/tutorials/ComSandboxDemo/SimpleCom/
-                exit 1
-            }
-        }
-      shell: pwsh
+    - name: Upload native artifacts
+      if: (github.ref == 'refs/heads/main') 
+      uses: actions/upload-artifact@v4
+      with:
+        name: native-libraries
+        path: ${{ github.workspace }}\artifacts\native
