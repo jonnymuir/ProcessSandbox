@@ -27,7 +27,7 @@ public class EndToEndTests : IDisposable
         _loggerFactory = LoggerFactory.Create(builder =>
         {
             // Minimum level for logging (e.g., Information, Debug, or Trace)
-            builder.SetMinimumLevel(LogLevel.Information);
+            builder.SetMinimumLevel(LogLevel.Warning);
 
             // Add the Debug provider
             builder.AddDebug();
