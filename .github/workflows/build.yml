@@ -32,7 +32,7 @@ jobs:
     
     - name: Install Free Pascal (Manual Portable)
       run: |
-        curl.exe -L "https://downloads.sourceforge.net/project/freepascal/Win32/3.2.2/fpc-3.2.2.i386-win32.exe" -o fpc_setup.exe
+        curl.exe -L "https://downloads.sourceforge.net/project/freepascal/Win32/3.2.2/fpc-3.2.2.x86_64-win64.exe" -o fpc_setup.exe
 
         Write-Host "Installing FPC..."
         $process = Start-Process .\fpc_setup.exe -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR=C:\fpc" -Wait -PassThru
@@ -41,19 +41,15 @@ jobs:
             exit 1
         }
 
-        $fpcPath = "C:\fpc\bin\i386-win32"
+        $fpcPath = "C:\fpc\bin\x86_64-win64"
         if (Test-Path "$fpcPath\fpc.exe") {
             Add-Content -Path $env:GITHUB_PATH -Value $fpcPath
+            $env:Path += ";$fpcPath"
             Write-Host "FPC installed successfully at $fpcPath"
         } else {
             Write-Error "fpc.exe not found at $fpcPath after installation."
             exit 1
         }
-
-        Add-Content -Path $env:GITHUB_PATH -Value $fpcPath
-        
-        # Also add to current session path so the VERY NEXT line can use it
-        $env:Path += ";$fpcPath"
         
         Write-Host "Verifying FPC installation..."
         fpc -iV
