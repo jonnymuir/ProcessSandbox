@@ -66,6 +66,8 @@ var
   Connection, Recordset: OleVariant;
   Response: string;
   ConnStr: string;
+  User: string;
+  Pass: string;
 begin
 
   // Example of calling out to com objects
