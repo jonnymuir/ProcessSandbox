@@ -20,9 +20,13 @@ internal static class ComNative
     [DllImport("ole32.dll")]
     public static extern int CoRevokeClassObject(uint dwRegister);
 
+    [DllImport("ole32.dll")]
+    public static extern int CoResumeClassObjects();
+
     [UnmanagedFunctionPointer(CallingConvention.StdCall)]
     public delegate int DllGetClassObject(ref Guid clsid, ref Guid iid, [Out, MarshalAs(UnmanagedType.Interface)] out object ppv);
 
     public const uint CLSCTX_INPROC_SERVER = 0x1;
     public const uint REGCLS_MULTIPLEUSE = 1;
+    public const uint REGCLS_SUSPENDED = 4;
 }

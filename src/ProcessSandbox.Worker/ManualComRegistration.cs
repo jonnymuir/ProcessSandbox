@@ -67,10 +67,13 @@ public class ManualComRegistration : IDisposable
             ref clsid,
             factory,
             ComNative.CLSCTX_INPROC_SERVER,
-            1 | 4, // REGCLS_MULTIPLEUSE (1) | REGCLS_SUSPENDED (4),
+            ComNative.REGCLS_MULTIPLEUSE | ComNative.REGCLS_SUSPENDED,
             out uint cookie);
 
         if (hr != 0) throw new Exception($"CoRegisterClassObject failed: {hr:X}");
+
+        ComNative.CoResumeClassObjects();
+
         _registrationCookies.Add(cookie);
     }
 
@@ -95,10 +98,13 @@ public class ManualComRegistration : IDisposable
             ref clsid,
             factory,
             ComNative.CLSCTX_INPROC_SERVER,
-            1 | 4, // REGCLS_MULTIPLEUSE (1) | REGCLS_SUSPENDED (4),
+            ComNative.REGCLS_MULTIPLEUSE | ComNative.REGCLS_SUSPENDED,
             out uint cookie);
 
         if (hr != 0) throw new Exception($"CoRegisterClassObject (Native) failed: {hr:X}");
+
+        ComNative.CoResumeClassObjects();
+
         _registrationCookies.Add(cookie);
     }
 
