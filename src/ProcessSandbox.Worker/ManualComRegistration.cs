@@ -67,7 +67,7 @@ public class ManualComRegistration : IDisposable
             ref clsid,
             factory,
             ComNative.CLSCTX_INPROC_SERVER,
-            ComNative.REGCLS_MULTIPLEUSE,
+            1 | 4, // REGCLS_MULTIPLEUSE (1) | REGCLS_SUSPENDED (4),
             out uint cookie);
 
         if (hr != 0) throw new Exception($"CoRegisterClassObject failed: {hr:X}");
@@ -95,7 +95,7 @@ public class ManualComRegistration : IDisposable
             ref clsid,
             factory,
             ComNative.CLSCTX_INPROC_SERVER,
-            ComNative.REGCLS_MULTIPLEUSE,
+            1 | 4, // REGCLS_MULTIPLEUSE (1) | REGCLS_SUSPENDED (4),
             out uint cookie);
 
         if (hr != 0) throw new Exception($"CoRegisterClassObject (Native) failed: {hr:X}");
@@ -159,12 +159,20 @@ public class SimpleManagedFactory : IClassFactory
 
         object instance = Activator.CreateInstance(_type!)!;
         IntPtr pUnk = Marshal.GetIUnknownForObject(instance);
+
+        try
+        {
 #if NETFRAMEWORK || NET48
-        Marshal.QueryInterface(pUnk, ref riid, out ppvObject);
+            int hr = Marshal.QueryInterface(pUnk, ref riid, out ppvObject);
 #else
-        Marshal.QueryInterface(pUnk, in riid, out ppvObject);
+            int hr = Marshal.QueryInterface(pUnk, in riid, out ppvObject);
 #endif
-        Marshal.Release(pUnk);
+            if (hr != 0) Marshal.ThrowExceptionForHR(hr);
+        }
+        finally
+        {
+            Marshal.Release(pUnk);
+        }
     }
 
     /// <summary>
