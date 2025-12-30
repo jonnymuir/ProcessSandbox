@@ -109,10 +109,26 @@ var config = new ProcessPoolConfiguration
 ## Use Cases
 
 ### COM Interop (32-bit)
+
+Supply the ComClsid to call directly in to a com object without the need to register it.
+
+Use extra com dependencies if you have dependant com object you need to call into. Look in src/tutorials/ComSandboxDemo for an example of how this works.
+
+Very useful for running in web apps / app services when you don't have access to the registry
+
 ```csharp
 var config = new ProcessPoolConfiguration
 {
     DotNetVersion = DotNetVersion.Net48_32Bit,
+    ComClsid = new Guid("11111111-2222-3333-4444-555555555555"),
+    ImplementationAssemblyPath = Path.Combine(AppContext.BaseDirectory, "workers", "SimpleComDelphi32.dll"),
+    ExtraComDependencies = [
+        new ComDependency
+        {
+            Clsid = new Guid("B1E9D2C4-8A6F-4E2B-9D3D-1234567890AB"),
+            DllPath = Path.Combine(AppContext.BaseDirectory, "workers", "ComEngineInfo32.dll")
+        }
+    ],
     MaxMemoryMB = 1024,  // well within 32-bit limit
     MaxGdiHandles = 10000
 };
@@ -180,11 +196,8 @@ MIT License - see [LICENSE](./LICENSE) for details.
 
 ## Roadmap
 
-- [ ] Call com objects directly just via an interface contract. No need for the manifest or an intermediate c# wrapper. This would need to use the COM Binary Interface (the VTable) but skip the COM Infrastructure (the Registry and the Service Control Manager).
-- [ ] Circuit breaker pattern
-- [ ] Dynamic pool scaling
+- [x] ~~Call com objects directly just via an interface contract. No need for the manifest or an intermediate c# wrapper. This would need to use the COM Binary Interface (the VTable) but skip the COM Infrastructure (the Registry and the Service Control Manager).~~ DONE
 - [ ] Telemetry/metrics export
-- [ ] Request priority queues
 
 ## Support
 
