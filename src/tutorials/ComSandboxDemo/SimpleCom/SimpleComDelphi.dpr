@@ -31,6 +31,8 @@ function GetProcessHandleCount(hProcess: HANDLE; var pdwHandleCount: DWORD): BOO
 const
   CLSID_SimpleCalculator: TGUID = '{11111111-2222-3333-4444-555555555555}';
   IID_ICalculator: TGUID        = '{E1234567-ABCD-1234-EF12-0123456789AB}';
+  CLASS_ComEngineInfo: TGUID    = '{B1E9D2C4-8A6F-4E2B-9D3D-1234567890AB}';
+  IID_IEngineInfo: TGUID        = '{A1B2C3D4-E5F6-4A5B-9C8D-7E6F5A4B3C2D}';
 
 type
   ICalculator = interface(IUnknown)
@@ -75,10 +77,8 @@ var
   EngineObj: IUnknown;
   EngineMsg: string;
   EngineIntf: IEngineInfo;
-const
-  CLASS_ComEngineInfo: TGUID = '{B1E9D2C4-8A6F-4E2B-9D3D-1234567890AB}';
 begin
-
+  EngineIntf := nil;
   // Example of calling out to com objects
 
   try
