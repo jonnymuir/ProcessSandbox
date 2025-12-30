@@ -84,9 +84,9 @@ jobs:
     - name: Build 32-bit
       run: dotnet build src/ProcessSandbox.Worker/ProcessSandbox.Worker.csproj -c Release -f net48 -r win-x86 --no-restore
     
-    # - name: Test
-    #   if: github.event_name != 'workflow_dispatch' || (github.event.inputs.action_mode == 'full-build')
-    #   run: dotnet test --configuration Release --no-build --verbosity normal --collect:"XPlat Code Coverage"
+    - name: Test
+      if: github.event_name != 'workflow_dispatch' || (github.event.inputs.action_mode == 'full-build')
+      run: dotnet test --configuration Release --no-build --verbosity normal --collect:"XPlat Code Coverage"
     
     - name: Pack Other Packages
       run: dotnet pack /p:ExcludeProjects="**/ProcessSandbox.Worker.csproj" --configuration Release --no-build --output ${{ github.workspace }}\artifacts
