@@ -67,7 +67,7 @@ public class ManualComRegistration : IDisposable
             ref clsid,
             factory,
             ComNative.CLSCTX_INPROC_SERVER,
-            ComNative.REGCLS_MULTIPLEUSE | ComNative.REGCLS_SUSPENDED,
+            ComNative.REGCLS_MULTIPLEUSE | ComNative.REGCLS_SUSPENDED | ComNative.REGCLS_AGILE,
             out uint cookie);
 
         if (hr != 0) throw new Exception($"CoRegisterClassObject failed: {hr:X}");
@@ -98,7 +98,7 @@ public class ManualComRegistration : IDisposable
             ref clsid,
             factory,
             ComNative.CLSCTX_INPROC_SERVER,
-            ComNative.REGCLS_MULTIPLEUSE | ComNative.REGCLS_SUSPENDED,
+            ComNative.REGCLS_MULTIPLEUSE | ComNative.REGCLS_SUSPENDED | ComNative.REGCLS_AGILE,
             out uint cookie);
 
         if (hr != 0) throw new Exception($"CoRegisterClassObject (Native) failed: {hr:X}");

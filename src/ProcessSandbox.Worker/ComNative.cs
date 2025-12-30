@@ -29,4 +29,6 @@ internal static class ComNative
     public const uint CLSCTX_INPROC_SERVER = 0x1;
     public const uint REGCLS_MULTIPLEUSE = 1;
     public const uint REGCLS_SUSPENDED = 4;
+
+    public const uint REGCLS_AGILE = 16;
 }
