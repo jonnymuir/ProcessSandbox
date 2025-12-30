@@ -87,7 +87,7 @@ public class ManualComRegistration : IDisposable
             // 126 = Missing dependency (a DLL this DLL needs is gone)
             throw new Exception($"Failed to load native DLL {dllPath}. Win32 Error: {lastError}");
         }
-        
+
         _loadedLibraries.Add(hModule);
 
         IntPtr procAddr = ComNative.GetProcAddress(hModule, "DllGetClassObject");
@@ -105,12 +105,10 @@ public class ManualComRegistration : IDisposable
             ref clsid,
             factory,
             ComNative.CLSCTX_INPROC_SERVER,
-            ComNative.REGCLS_MULTIPLEUSE | ComNative.REGCLS_SUSPENDED | ComNative.REGCLS_AGILE,
+            ComNative.REGCLS_MULTIPLEUSE,
             out uint cookie);
 
         if (hr != 0) throw new Exception($"CoRegisterClassObject (Native) failed: {hr:X}");
-
-        ComNative.CoResumeClassObjects();
 
         _registrationCookies.Add(cookie);
     }
