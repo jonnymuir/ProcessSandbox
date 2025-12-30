@@ -166,6 +166,10 @@ public class WorkerProcess(ProcessPoolConfiguration config, ILogger<WorkerProces
                     {
                         _workerReadyTcs.TrySetResult(true);
                     }
+                    else 
+                    {
+                        logger.LogInformation("[Worker {WorkerId}] {Output}", _workerId, e.Data);
+                    }
                 }
             };
 
