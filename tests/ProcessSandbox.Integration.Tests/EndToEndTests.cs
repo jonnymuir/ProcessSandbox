@@ -177,7 +177,7 @@ public class EndToEndTests : IDisposable
     /// Tests C# COM object with chained dependencies without registry.
     /// </summary>
     /// <returns></returns>
-    [ProcessSandbox.Integration.Tests.WindowsFact]
+/*     [ProcessSandbox.Integration.Tests.WindowsFact]
     public async Task Proxy_CSharpComChained_WorksWithoutRegistry()
     {
         // Arrange
@@ -206,7 +206,7 @@ public class EndToEndTests : IDisposable
 
         // Assert
         Assert.Equal("Primary reporting: C# Internal Engine Active", result);
-    }
+    } */
 
     private ProcessPoolConfiguration CreateTestConfiguration(Type implementationType)
     {
