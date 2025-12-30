@@ -57,36 +57,42 @@ app.MapGet("/", () =>
             h2 { margin-top: 0; font-size: 1.1rem; border-bottom: 2px solid #eee; padding-bottom: 10px; }
             label { display: block; font-size: 0.75rem; font-weight: bold; margin-top: 12px; color: #666; text-transform: uppercase; }
             input, select { width: 100%; padding: 10px; margin: 4px 0 8px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; font-size: 0.9rem; }
+            
+            .info-box { 
+                margin: 15px 0; 
+                padding: 12px; 
+                background: #e7f3ff; 
+                border-left: 4px solid #007bff; 
+                border-radius: 4px; 
+                font-size: 0.85rem; 
+                line-height: 1.4;
+            }
+            .info-header { font-weight: bold; color: #0056b3; margin-bottom: 5px; display: block; }
+
             .btn-group { display: flex; gap: 10px; margin-top: 10px; }
             button { flex: 1; padding: 12px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; transition: all 0.2s; }
             #btn-start { background: #007bff; color: white; }
             #btn-start:disabled { background: #ccc; cursor: not-allowed; }
             #btn-cancel { background: #dc3545; color: white; display: none; }
+            
             .status-bar { background: #333; color: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: flex; flex-wrap: wrap; justify-content: space-between; font-family: monospace; font-size: 0.85rem; gap: 10px; }
             .status-bar span { color: #00d4ff; font-weight: bold; }
+            
             .process-group { margin-bottom: 15px; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; background: white; }
             .process-header { background: #f8f9fa; padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; flex-wrap: wrap; gap: 10px; }
             .badge { padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; color: white; }
             .badge-worker { background: #007bff; }
             .badge-host { background: #6f42c1; }
             .badge-active { background: #28a745; box-shadow: 0 0 8px rgba(40,167,69,0.5); }
+            
             .table-wrapper { overflow-x: auto; }
             table { width: 100%; border-collapse: collapse; font-size: 0.8rem; min-width: 450px; }
             th { text-align: left; padding: 10px; color: #888; border-bottom: 1px solid #eee; font-weight: 600; }
             td { padding: 10px; border-bottom: 1px solid #f9f9f9; }
-            .result-cell { font-size: 1.5rem; font-weight: bold; color: #28a745; background: #f0f9ff; text-align: center; width: 100px; }
+            .result-cell { font-size: 1.2rem; font-weight: bold; color: #28a745; background: #f0f9ff; text-align: center; width: 120px; }
             
             #error-box { margin-top: 20px; display: none; padding: 15px; background: #fff1f0; border: 1px solid #ffa39e; border-radius: 8px; }
-            .error-item { 
-                color: #cf1322; 
-                font-size: 0.75rem; 
-                font-family: 'Consolas', monospace; 
-                margin-bottom: 10px; 
-                padding-bottom: 10px; 
-                border-bottom: 1px dashed #ffa39e; 
-                white-space: pre-wrap;
-                word-break: break-all;
-            }
+            .error-item { color: #cf1322; font-size: 0.75rem; font-family: 'Consolas', monospace; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px dashed #ffa39e; white-space: pre-wrap; word-break: break-all; }
         </style>
     </head>
     <body>
@@ -99,17 +105,21 @@ app.MapGet("/", () =>
                         <option value='c'>C 32bit (SimpleCom.dll)</option>
                         <option value='delphi32'>Delphi 32bit (SimpleComDelphi32.dll)</option>
                     </select>
+
+                    <div id='engine-info' class='info-box'></div>
+
                     <label>Concurrent Threads</label>
                     <input type='number' id='threads' value='2' min='1' max='20' />
                     <label>Batch Size (Calls per Req)</label>
                     <input type='number' id='batchSize' value='10' min='1' />
                     <label>Total Iterations</label>
                     <input type='number' id='iters' value='100' min='1' />
-                    <label>Input Values (X, Y)</label>
-                    <div style='display:flex; gap:10px'>
-                        <input type='number' id='x' value='10' />
-                        <input type='number' id='y' value='5' />
-                    </div>
+                    
+                    <label id='label-x'>Input X</label>
+                    <input type='number' id='x' value='10' />
+                    <label id='label-y'>Input Y</label>
+                    <input type='number' id='y' value='5' />
+
                     <div class='btn-group'>
                         <button type='submit' id='btn-start'>Start Run</button>
                         <button type='button' id='btn-cancel'>Cancel</button>
@@ -139,8 +149,35 @@ app.MapGet("/", () =>
             let sentIters = 0;
             let totalTarget = 0;
 
+            const engineDescriptions = {
+                'c': {
+                    title: 'C (Fault Injection Mode)',
+                    xLabel: 'Memory Leak (MB)',
+                    yLabel: 'Handle Leak (Count)',
+                    text: 'This engine demonstrates sandbox resilience. It will deliberately <b>leak the specified MB and Handles</b> on every single call until the process limits are hit.'
+                },
+                'delphi32': {
+                    title: 'Delphi (COM Integration Mode)',
+                    xLabel: 'Input X',
+                    yLabel: 'Input Y',
+                    text: 'Demonstrates <b>Advanced COM chaining</b>. It calls <b>ADO</b> for Azure SQL connectivity and links to <b>ComEngineInfo32.dll</b> via manual in-memory registration.'
+                }
+            };
+
+            function updateEngineUI() {
+                const engine = document.getElementById('engine').value;
+                const info = engineDescriptions[engine];
+                document.getElementById('engine-info').innerHTML = `<span class='info-header'>${info.title}</span>${info.text}`;
+                document.getElementById('label-x').innerText = info.xLabel;
+                document.getElementById('label-y').innerText = info.yLabel;
+            }
+
+            document.getElementById('engine').addEventListener('change', updateEngineUI);
+            updateEngineUI();
+
             function formatBytes(bytes) {
                 if (!bytes) return '0 B';
+                if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
                 return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
             }
 
@@ -153,14 +190,14 @@ app.MapGet("/", () =>
 
                 container.innerHTML = sortedPids.map(pid => {
                     const s = processStats[pid];
-                    const isActive = (new Date() - s.lastTime) < 1000;
+                    const isActive = (new Date() - s.lastTime) < 1500;
                     return `
                         <div class='process-group'>
                             <div class='process-header'>
                                 <div>
                                     <span class='badge badge-worker ${isActive ? 'badge-active' : ''}'>WORKER PID ${pid}</span>
                                     <span class='badge badge-host'>HOST ${s.hostPid}</span>
-                                    <strong>${s.engine}</strong>
+                                    <strong style='margin-left:10px'>${s.engineName}</strong>
                                 </div>
                                 <span style='font-size:0.75rem; color:#666'>${s.lastTime.toLocaleTimeString()}</span>
                             </div>
@@ -189,19 +226,14 @@ app.MapGet("/", () =>
 
                 if (globalErrors.length > 0) {
                     errorBox.style.display = 'block';
-                    errorList.innerHTML = globalErrors.slice(-5).map(err => `
-                        <div class='error-item'>
-                            <strong>[${err.time}]</strong> ${err.msg}
-                        </div>
+                    errorList.innerHTML = globalErrors.slice(-10).reverse().map(err => `
+                        <div class='error-item'><strong>[${err.time}]</strong> ${err.msg}</div>
                     `).join('');
-                } else {
-                    errorBox.style.display = 'none';
                 }
             }
 
             async function runBatch(engine, x, y, requestedBatchSize) {
                 if (abortController.signal.aborted) return;
-
                 const remaining = totalTarget - sentIters;
                 if (remaining <= 0) return;
 
@@ -210,33 +242,19 @@ app.MapGet("/", () =>
 
                 try {
                     const formData = new URLSearchParams({ engine, x, y, batchSize: batchToRequest });
-                    const response = await fetch('/calculate', { 
-                        method: 'POST', 
-                        body: formData,
-                        signal: abortController.signal
-                    });
-                    
+                    const response = await fetch('/calculate', { method: 'POST', body: formData, signal: abortController.signal });
                     const data = await response.json();
                     
-                    if (!response.ok || !data.success) {
-                        throw new Error(data.detail || 'Unknown Server Error');
-                    }
+                    if (!data.success) throw new Error(data.detail || 'Server logic failure');
 
                     data.results.forEach(item => {
-                        // Validate JSON pattern to prevent 'string did not match expected pattern'
-                        let comInfo;
-                        try {
-                            comInfo = JSON.parse(item.engineJson);
-                        } catch(e) {
-                            throw new Error('Engine returned invalid JSON: ' + item.engineJson);
-                        }
-                        
+                        let comInfo = JSON.parse(item.engineJson);
                         const pid = comInfo.pid;
                         document.getElementById('stat-host').innerText = data.hostPid;
 
                         if (!processStats[pid]) {
                             processStats[pid] = {
-                                engine: comInfo.engine, hostPid: data.hostPid, count: 0, lastResult: 0,
+                                engineName: comInfo.engine, hostPid: data.hostPid, count: 0, lastResult: '',
                                 firstSeen: performance.now(), lastTime: new Date(),
                                 memMin: Infinity, memMax: -Infinity, memLast: 0,
                                 hndMin: Infinity, hndMax: -Infinity, hndLast: 0
@@ -261,10 +279,7 @@ app.MapGet("/", () =>
                     updateDisplay();
                 } catch (err) {
                     if (err.name !== 'AbortError') {
-                        globalErrors.push({ 
-                            time: new Date().toLocaleTimeString(), 
-                            msg: err.message 
-                        });
+                        globalErrors.push({ time: new Date().toLocaleTimeString(), msg: err.message });
                         updateDisplay();
                     }
                 }
@@ -280,13 +295,12 @@ app.MapGet("/", () =>
                 const x = document.getElementById('x').value;
                 const y = document.getElementById('y').value;
 
-                updateDisplay();
                 document.getElementById('btn-start').disabled = true;
                 document.getElementById('btn-cancel').style.display = 'block';
+                document.getElementById('error-box').style.display = 'none';
                 
                 abortController = new AbortController();
                 startTime = performance.now();
-                
                 const timerInterval = setInterval(() => {
                     document.getElementById('stat-time').innerText = ((performance.now() - startTime) / 1000).toFixed(1) + 's';
                 }, 100);
@@ -302,7 +316,6 @@ app.MapGet("/", () =>
                     clearInterval(timerInterval);
                     document.getElementById('btn-start').disabled = false;
                     document.getElementById('btn-cancel').style.display = 'none';
-                    abortController = null;
                 }
             };
 
@@ -322,63 +335,37 @@ app.MapPost("/calculate", async (HttpRequest request) =>
         int x = int.Parse(form["x"]!);
         int y = int.Parse(form["y"]!);
         int batchSize = int.Parse(form["batchSize"]!);
-        if (batchSize <= 0) batchSize = 1;
         string engine = form["engine"]!;
 
-        ICalculator activeProxy = engine switch
-        {
-            "delphi32" => proxyDelphi32,
-            _ => proxyC
-        };
+        ICalculator activeProxy = engine == "delphi32" ? proxyDelphi32 : proxyC;
 
         var batchResults = new List<object>();
-
         for (int i = 0; i < batchSize; i++)
         {
             try
             {
                 var sum = activeProxy.Add(x, y);
                 var info = activeProxy.GetInfo();
-                batchResults.Add(new { Result = sum, EngineJson = info });
+                batchResults.Add(new { Result = sum.ToString(), EngineJson = info });
             }
             catch (Exception ex)
             {
-                // THIS IS THE SANDBOX PROTECTING YOU
-                // The worker died mid-batch. We report it and stop the batch.
                 batchResults.Add(new
                 {
                     Result = "CRASH",
-                    EngineJson = JsonSerializer.Serialize(new
-                    {
-                        engine,
-                        pid = -1,
-                        memoryBytes = 0,
-                        handles = 0,
-                        error = FlattenException(ex)
-                    })
+                    EngineJson = JsonSerializer.Serialize(new { engine, pid = -1, memoryBytes = 0, handles = 0, error = FlattenException(ex) })
                 });
             }
         }
 
-        return Results.Ok(new
-        {
-            Success = true,
-            HostPid = Environment.ProcessId,
-            Results = batchResults
-        });
+        return Results.Ok(new { Success = true, HostPid = Environment.ProcessId, Results = batchResults });
     }
     catch (Exception ex)
     {
-        // Recursively capture message and stack trace
-        return Results.Json(new
-        {
-            Success = false,
-            detail = FlattenException(ex)
-        }, statusCode: 500);
+        return Results.Json(new { Success = false, detail = FlattenException(ex) }, statusCode: 500);
     }
 });
 
-// Helper to get full stack trace and inner exceptions
 string FlattenException(Exception ex)
 {
     var sb = new StringBuilder();
