@@ -36,7 +36,7 @@ internal class Program
         // Platform check for STA (only matters on Windows)
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
-            mainThread.SetApartmentState(ApartmentState.STA);
+            //mainThread.SetApartmentState(ApartmentState.STA);
         }
 
         mainThread.Start();

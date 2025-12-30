@@ -96,10 +96,17 @@ public class ManualComRegistration : IDisposable
 
         var getClassObject = Marshal.GetDelegateForFunctionPointer<ComNative.DllGetClassObject>(procAddr);
 
+        
+        IntPtr pFactory = IntPtr.Zero;
+        
         Guid iidIClassFactory = new Guid("00000001-0000-0000-C000-000000000046");
-        int hr = getClassObject(ref clsid, ref iidIClassFactory, out object factory);
+        int hr = getClassObject(ref clsid, ref iidIClassFactory, out pFactory);
 
         if (hr != 0) throw new Exception($"DllGetClassObject failed: {hr:X}");
+
+#pragma warning disable CA1416 // Validate platform compatibility
+        object factory = Marshal.GetObjectForIUnknown(pFactory);
+#pragma warning restore CA1416 // Validate platform compatibility
 
         hr = ComNative.CoRegisterClassObject(
             ref clsid,
@@ -108,6 +115,8 @@ public class ManualComRegistration : IDisposable
             ComNative.REGCLS_MULTIPLEUSE,
             out uint cookie);
 
+        
+        Marshal.Release(pFactory);
         if (hr != 0) throw new Exception($"CoRegisterClassObject (Native) failed: {hr:X}");
 
         _registrationCookies.Add(cookie);

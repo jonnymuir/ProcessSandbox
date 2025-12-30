@@ -75,7 +75,6 @@ const
 begin
 
   // Example of calling out to com objects
-  CoInitialize(nil);
 
   try
     EngineObj := CreateComObject(CLASS_ComEngineInfo); 
@@ -126,7 +125,6 @@ begin
     // 5. Cleanup
     Recordset := Unassigned;
     Connection := Unassigned;
-    CoUninitialize;
   end;
   // End example of calling out to com
 
