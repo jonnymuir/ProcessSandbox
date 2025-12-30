@@ -205,7 +205,7 @@ public class EndToEndTests : IDisposable
         var result = proxy.GetCombinedReport();
 
         // Assert
-        Assert.Equal("Primary reporting: C# Internal Engine Active", result);
+        Assert.Equal("Success: C# Internal Engine Active", result);
     }
 
     private ProcessPoolConfiguration CreateTestConfiguration(Type implementationType)
