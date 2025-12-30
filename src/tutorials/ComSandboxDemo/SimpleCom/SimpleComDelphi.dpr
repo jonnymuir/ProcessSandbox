@@ -19,6 +19,10 @@ type
     PagefileUsage: SIZE_T;
     PeakPagefileUsage: SIZE_T;
   end;
+  IEngineInfo = interface(IUnknown)
+    ['{A1B2C3D4-E5F6-4A5B-9C8D-7E6F5A4B3C2D}']
+    function GetEngineName: WideString; stdcall;
+  end;
 
 // Manually import the function from psapi.dll
 function GetProcessMemoryInfo(Process: HANDLE; ppsmemCounters: Pointer; cb: DWORD): BOOL; stdcall; external 'psapi.dll';
@@ -68,8 +72,9 @@ var
   ConnStr: string;
   User: string;
   Pass: string;
-  EngineObj: OleVariant;
+  EngineObj: IUnknown;
   EngineMsg: string;
+  EngineIntf: IEngineInfo;
 const
   CLASS_ComEngineInfo: TGUID = '{B1E9D2C4-8A6F-4E2B-9D3D-1234567890AB}';
 begin
@@ -77,8 +82,16 @@ begin
   // Example of calling out to com objects
 
   try
+    // Create the object as IUnknown first
     EngineObj := CreateComObject(CLASS_ComEngineInfo); 
-    EngineMsg := EngineObj.GetEngineName;
+    
+    // Query for our specific interface
+    if (EngineObj <> nil) and (EngineObj.QueryInterface(IID_IEngineInfo, EngineIntf) = S_OK) then
+    begin
+      EngineMsg := EngineIntf.GetEngineName;
+    end
+    else
+      EngineMsg := 'Engine Link Failed: Interface IEngineInfo not supported';
   except
     on E: Exception do
       EngineMsg := 'Engine Link Failed: ' + E.Message;

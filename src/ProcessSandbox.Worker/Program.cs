@@ -89,7 +89,7 @@ internal class Program
                             if (Guid.TryParse(parts[1], out Guid clsid))
                             {
                                 logger.LogInformation("In-Memory Registering: {Dll} [{Guid}]", dllPath, clsid);
-                                using var comReg = new ManualComRegistration();
+                                var comReg = new ManualComRegistration();
                                 comReg.RegisterDll(dllPath, clsid);
                                 _registrations.Add(comReg);
                             }
