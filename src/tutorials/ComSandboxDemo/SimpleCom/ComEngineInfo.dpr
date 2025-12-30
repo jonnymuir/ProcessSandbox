@@ -30,10 +30,10 @@ type
   end;
 
 exports
-  DllGetClassObject,
-  DllCanUnloadNow,
-  DllRegisterServer,
-  DllUnregisterServer;
+  DllGetClassObject name 'DllGetClassObject',
+  DllCanUnloadNow name 'DllCanUnloadNow',
+  DllRegisterServer name 'DllRegisterServer',
+  DllUnregisterServer name 'DllUnregisterServer';
 
 initialization
   TComEngineInfoFactory.Create(ComServer, TComEngineInfo, CLASS_ComEngineInfo,

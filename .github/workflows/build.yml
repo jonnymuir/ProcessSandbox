@@ -65,9 +65,9 @@ jobs:
         move src\tutorials\ComSandboxDemo\SimpleCom\SimpleComDelphi.dll ${{ github.workspace }}/artifacts/native/SimpleComDelphi32.dll    
         fpc -Px86_64 -Mdelphi -O2 src/tutorials/ComSandboxDemo/SimpleCom/SimpleComDelphi.dpr
         move src\tutorials\ComSandboxDemo\SimpleCom\SimpleComDelphi.dll ${{ github.workspace }}/artifacts/native/SimpleComDelphi64.dll
-        fpc -Pi386 -Mdelphi -O2 src/tutorials/ComSandboxDemo/SimpleCom/ComEngineInfo.dpr
+        fpc -Pi386 -Mdelphi -O2 -XX -CX src/tutorials/ComSandboxDemo/SimpleCom/ComEngineInfo.dpr
         move src\tutorials\ComSandboxDemo\SimpleCom\ComEngineInfo.dll ${{ github.workspace }}/artifacts/native/ComEngineInfo32.dll
-        fpc -Px86_64 -Mdelphi -O2 src/tutorials/ComSandboxDemo/SimpleCom/ComEngineInfo.dpr
+        fpc -Px86_64 -Mdelphi -O2 -XX -CX src/tutorials/ComSandboxDemo/SimpleCom/ComEngineInfo.dpr
         move src\tutorials\ComSandboxDemo\SimpleCom\ComEngineInfo.dll ${{ github.workspace }}/artifacts/native/ComEngineInfo64.dll
 
     - name: Setup .NET

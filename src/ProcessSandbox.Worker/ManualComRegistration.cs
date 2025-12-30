@@ -80,7 +80,14 @@ public class ManualComRegistration : IDisposable
     private void RegisterNativeDll(string dllPath, Guid clsid)
     {
         IntPtr hModule = ComNative.LoadLibrary(dllPath);
-        if (hModule == IntPtr.Zero) throw new Exception($"Failed to load native DLL {dllPath}");
+        if (hModule == IntPtr.Zero) 
+        {
+            int lastError = Marshal.GetLastWin32Error();
+            // 193 = Bitness mismatch (trying to load 32-bit into 64-bit)
+            // 126 = Missing dependency (a DLL this DLL needs is gone)
+            throw new Exception($"Failed to load native DLL {dllPath}. Win32 Error: {lastError}");
+        }
+        
         _loadedLibraries.Add(hModule);
 
         IntPtr procAddr = ComNative.GetProcAddress(hModule, "DllGetClassObject");
