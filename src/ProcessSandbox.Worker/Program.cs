@@ -18,6 +18,8 @@ public class Program
     public static async Task<int> Main(string[] args)
     {
 
+        Console.WriteLine($"[Worker] Apartment State: {Thread.CurrentThread.GetApartmentState()}");
+        
         // Worker process entry point
         // Expected args: --config <base64-encoded-config>
 
