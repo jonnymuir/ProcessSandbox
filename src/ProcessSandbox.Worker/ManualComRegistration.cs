@@ -4,6 +4,9 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
+#if !NET48
+using System.Runtime.Versioning;
+#endif
 
 namespace ProcessSandbox.Worker;
 
@@ -47,32 +50,30 @@ public class ManualComRegistration : IDisposable
 
     private void RegisterManagedType(string dllPath, Guid clsid)
     {
-        // Load the assembly and find the type decorated with the matching GUID
+#if WINDOWS || NETFRAMEWORK        
         var assembly = Assembly.LoadFrom(dllPath);
         var type = assembly.GetTypes().FirstOrDefault(t =>
-            t.IsClass && 
-            !t.IsAbstract &&
+            t.IsClass &&
             t.GetCustomAttribute<GuidAttribute>()?.Value.Equals(clsid.ToString(), StringComparison.OrdinalIgnoreCase) == true);
 
-        if (type == null)
-        {
-            throw new Exception($"Could not find a managed type with CLSID {clsid} in {dllPath}");
-        }
-        
-        // Create an instance. .NET automatically provides the ClassFactory plumbing 
-        // when we pass a managed object to CoRegisterClassObject.
-        object instance = Activator.CreateInstance(type)
-            ?? throw new Exception($"Failed to create instance of {type.FullName}");
+        if (type == null) throw new Exception($"CLSID {clsid} not found.");
 
+        // Create the factory wrapper
+        var factory = new SimpleManagedFactory(type);
+
+        // Register the FACTORY, not the object instance
         int hr = ComNative.CoRegisterClassObject(
             ref clsid,
-            instance,
+            factory,
             ComNative.CLSCTX_INPROC_SERVER,
             ComNative.REGCLS_MULTIPLEUSE,
             out uint cookie);
 
-        if (hr != 0) throw new Exception($"CoRegisterClassObject (Managed) failed: {hr:X}");
+        if (hr != 0) throw new Exception($"CoRegisterClassObject failed: {hr:X}");
         _registrationCookies.Add(cookie);
+#else
+    throw new PlatformNotSupportedException("COM registration only supported on Windows.");
+#endif
     }
 
     private void RegisterNativeDll(string dllPath, Guid clsid)
@@ -110,4 +111,67 @@ public class ManualComRegistration : IDisposable
     {
         foreach (var cookie in _registrationCookies) ComNative.CoRevokeClassObject(cookie);
     }
+}
+
+/// <summary>
+/// Simple implementation of IClassFactory for managed types.
+/// </summary>
+[ComImport, Guid("00000001-0000-0000-C000-000000000046"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+public interface IClassFactory
+{
+    /// <summary>
+    /// Creates an instance of the COM object.
+    /// </summary>
+    /// <param name="pUnkOuter"></param>
+    /// <param name="riid"></param>
+    /// <param name="ppvObject"></param>
+    void CreateInstance(IntPtr pUnkOuter, ref Guid riid, out IntPtr ppvObject);
+    /// <summary>
+    /// Locks or unlocks the server in memory.
+    /// </summary>
+    /// <param name="fLock"></param>
+    void LockServer(bool fLock);
+}
+
+/// <summary>
+/// Simple managed class factory implementation
+/// </summary>
+#if !NET48
+[SupportedOSPlatform("windows")]
+#endif
+public class SimpleManagedFactory : IClassFactory
+{
+    private readonly Type _type;
+    /// <summary>
+    /// Creates a new factory for the specified type.
+    /// </summary>
+    /// <param name="type"></param>
+    public SimpleManagedFactory(Type type) => _type = type;
+
+    /// <summary>
+    /// Creates an instance of the COM object.
+    /// </summary>
+    /// <param name="pUnkOuter"></param>
+    /// <param name="riid"></param>
+    /// <param name="ppvObject"></param>
+    /// <exception cref="COMException"></exception>
+    public void CreateInstance(IntPtr pUnkOuter, ref Guid riid, out IntPtr ppvObject)
+    {
+        if (pUnkOuter != IntPtr.Zero) throw new COMException("Aggregation not supported", -2147221232); // CLASS_E_NOAGGREGATION
+
+        object instance = Activator.CreateInstance(_type!)!;
+        IntPtr pUnk = Marshal.GetIUnknownForObject(instance);
+#if NETFRAMEWORK || NET48
+        Marshal.QueryInterface(pUnk, ref riid, out ppvObject);
+#else
+        Marshal.QueryInterface(pUnk, in riid, out ppvObject);
+#endif
+        Marshal.Release(pUnk);
+    }
+
+    /// <summary>
+    /// Locks or unlocks the server in memory.
+    /// </summary>
+    /// <param name="fLock"></param>
+    public void LockServer(bool fLock) { }
 }
