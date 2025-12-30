@@ -67,12 +67,10 @@ public class ManualComRegistration : IDisposable
             ref clsid,
             factory,
             ComNative.CLSCTX_INPROC_SERVER,
-            ComNative.REGCLS_MULTIPLEUSE | ComNative.REGCLS_SUSPENDED | ComNative.REGCLS_AGILE,
+            ComNative.REGCLS_MULTIPLEUSE,
             out uint cookie);
 
         if (hr != 0) throw new Exception($"CoRegisterClassObject failed: {hr:X}");
-
-        ComNative.CoResumeClassObjects();
 
         _registrationCookies.Add(cookie);
     }
