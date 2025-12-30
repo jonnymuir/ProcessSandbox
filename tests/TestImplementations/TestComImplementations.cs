@@ -56,17 +56,32 @@ public interface IPrimaryService
 [SupportedOSPlatform("windows")]
 public class PrimaryService : IPrimaryService
 {
+    [DllImport("ole32.dll")]
+    private static extern int CoCreateInstance(
+        ref Guid rclsid,
+        IntPtr pUnkOuter,
+        uint dwClsContext,
+        ref Guid riid,
+        out IntPtr ppv);
+    
     /// <summary>
     /// Gets a combined report from the internal engine
     /// </summary>
     /// <returns></returns>
     public string GetCombinedReport()
     {
-        // This simulates the Delphi "CreateOleObject" call
-        // Because we register the InternalEngine in the worker process memory,
-        // this standard Activator call will find it.
-        var engineType = Type.GetTypeFromCLSID(new Guid("33333333-3333-3333-3333-333333333333"));
-        var engine = (IInternalEngine)Activator.CreateInstance(engineType!)!;
-        return $"Primary reporting: {engine!.GetStatus()}";
+        Guid clsid = new("33333333-3333-3333-3333-333333333333");
+        Guid iid = new("22222222-2222-2222-2222-222222222222");
+
+        // Test 1: Native call
+        int hr = CoCreateInstance(ref clsid, IntPtr.Zero, 1, ref iid, out IntPtr pUnk);
+        if (hr != 0) return $"Native registry check failed: {hr:X}";
+
+        // Test 2: Managed call
+        var engineType = Type.GetTypeFromCLSID(clsid);
+        if (engineType == null) return "GetTypeFromCLSID failed";
+
+        var engine = (IInternalEngine)Activator.CreateInstance(engineType)!;
+        return $"Success: {engine.GetStatus()}";
     }
 }
