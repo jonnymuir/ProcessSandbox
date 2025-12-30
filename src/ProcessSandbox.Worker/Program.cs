@@ -15,7 +15,7 @@ public class Program
     /// <param name="args"></param>
     /// <returns></returns>
     [STAThread]
-    public static int Main(string[] args)
+    public static async Task<int> Main(string[] args)
     {
 
         // Worker process entry point
