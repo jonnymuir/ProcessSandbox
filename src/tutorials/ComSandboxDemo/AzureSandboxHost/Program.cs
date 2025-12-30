@@ -4,6 +4,8 @@ using ProcessSandbox.Proxy;
 using System.Text.Json;
 using System.Diagnostics;
 using System.Text;
+using Microsoft.Extensions.Logging; // Added for LogLevel
+using ProcessSandbox.Abstractions;  // Added for ICalculator
 
 var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
@@ -14,20 +16,20 @@ var loggerFactory = LoggerFactory.Create(b =>
     b.SetMinimumLevel(LogLevel.Debug);
 });
 
-// .NET 4.8 Compatible Configurations
-var poolConfigC = new ProcessPoolConfiguration
+// ---------------------------------------------------------
+// 1. Define Templates (Immutable parts: DLL paths, CLSIDs)
+// ---------------------------------------------------------
+var templateC = new ProcessPoolConfiguration
 {
     DotNetVersion = DotNetVersion.Net48_32Bit,
     ComClsid = new Guid("11111111-2222-3333-4444-555555555555"),
-    MaxMemoryMB = 1024,
     ImplementationAssemblyPath = Path.Combine(AppContext.BaseDirectory, "workers", "net48", "win-x86", "SimpleCom.dll")
 };
 
-var poolConfigDelphi32 = new ProcessPoolConfiguration
+var templateDelphi = new ProcessPoolConfiguration
 {
     DotNetVersion = DotNetVersion.Net48_32Bit,
     ComClsid = new Guid("11111111-2222-3333-4444-555555555555"),
-    MaxMemoryMB = 1024,
     ImplementationAssemblyPath = Path.Combine(AppContext.BaseDirectory, "workers", "SimpleComDelphi32.dll"),
     ExtraComDependencies = [
         new ComDependency
@@ -38,8 +40,8 @@ var poolConfigDelphi32 = new ProcessPoolConfiguration
     ]
 };
 
-var proxyC = await ProcessProxy.CreateAsync<ICalculator>(poolConfigC, loggerFactory);
-var proxyDelphi32 = await ProcessProxy.CreateAsync<ICalculator>(poolConfigDelphi32, loggerFactory);
+// Global active proxy instance
+ICalculator? activeProxy = null;
 
 app.MapGet("/", () =>
 {
@@ -51,23 +53,19 @@ app.MapGet("/", () =>
         <meta name='viewport' content='width=device-width, initial-scale=1'>
         <style>
             body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f2f5; margin: 0; padding: 10px; color: #333; }
-            .container { max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: 320px 1fr; gap: 20px; }
+            .container { max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: 350px 1fr; gap: 20px; }
             @media (max-width: 900px) { .container { grid-template-columns: 1fr; } }
             .card { background: white; padding: 1.2rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); height: fit-content; }
             h2 { margin-top: 0; font-size: 1.1rem; border-bottom: 2px solid #eee; padding-bottom: 10px; }
             label { display: block; font-size: 0.75rem; font-weight: bold; margin-top: 12px; color: #666; text-transform: uppercase; }
-            input, select { width: 100%; padding: 10px; margin: 4px 0 8px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; font-size: 0.9rem; }
+            input, select { width: 100%; padding: 8px; margin: 4px 0 8px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; font-size: 0.9rem; }
             
-            .info-box { 
-                margin: 15px 0; 
-                padding: 12px; 
-                background: #e7f3ff; 
-                border-left: 4px solid #007bff; 
-                border-radius: 4px; 
-                font-size: 0.85rem; 
-                line-height: 1.4;
-            }
+            .info-box { margin: 15px 0; padding: 12px; background: #e7f3ff; border-left: 4px solid #007bff; border-radius: 4px; font-size: 0.85rem; line-height: 1.4; }
             .info-header { font-weight: bold; color: #0056b3; margin-bottom: 5px; display: block; }
+
+            details { border: 1px solid #eee; border-radius: 6px; padding: 10px; background: #fafafa; margin-bottom: 15px; }
+            summary { font-weight: bold; cursor: pointer; color: #007bff; font-size: 0.9rem; }
+            .config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
             .btn-group { display: flex; gap: 10px; margin-top: 10px; }
             button { flex: 1; padding: 12px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; transition: all 0.2s; }
@@ -107,6 +105,25 @@ app.MapGet("/", () =>
                     </select>
 
                     <div id='engine-info' class='info-box'></div>
+
+                    <details>
+                        <summary>Advanced Pool Settings</summary>
+                        <div class='config-grid'>
+                            <div><label>Min Pool</label><input type='number' id='minPoolSize' value='1' min='0' /></div>
+                            <div><label>Max Pool</label><input type='number' id='maxPoolSize' value='5' min='1' /></div>
+                            <div><label>Max Memory (MB)</label><input type='number' id='maxMemoryMB' value='1024' /></div>
+                            <div><label>GDI Limit</label><input type='number' id='maxGdiHandles' value='1000' /></div>
+                            <div><label>User Limit</label><input type='number' id='maxUserHandles' value='1000' /></div>
+                            <div><label>Total Handle Limit</label><input type='number' id='maxTotalHandles' value='10000' /></div>
+                            <div><label>Recycle Threshold (Calls)</label><input type='number' id='processRecycleThreshold' value='0' /></div>
+                            <div><label>Max Lifetime (sec)</label><input type='number' id='maxProcessLifetime' value='3600' /></div>
+                            <div><label>Start Timeout (sec)</label><input type='number' id='processStartTimeout' value='60' /></div>
+                            <div><label>Call Timeout (sec)</label><input type='number' id='methodCallTimeout' value='300' /></div>
+                            <div><label>Recycle Check (Calls)</label><input type='number' id='recycleCheckCalls' value='100' /></div>
+                            <div><label>Recycle Check (Sec)</label><input type='number' id='recycleCheckSeconds' value='10' /></div>
+                        </div>
+                        <label><input type='checkbox' id='verboseWorkerLogging' style='width:auto' /> Verbose Worker Logging</label>
+                    </details>
 
                     <label>Concurrent Threads</label>
                     <input type='number' id='threads' value='2' min='1' max='20' />
@@ -232,6 +249,37 @@ app.MapGet("/", () =>
                 }
             }
 
+            // --- 2. Configure Pool Function ---
+            async function configurePool() {
+                const engine = document.getElementById('engine').value;
+                const config = {
+                    minPoolSize: parseInt(document.getElementById('minPoolSize').value),
+                    maxPoolSize: parseInt(document.getElementById('maxPoolSize').value),
+                    maxMemoryMB: parseInt(document.getElementById('maxMemoryMB').value),
+                    maxGdiHandles: parseInt(document.getElementById('maxGdiHandles').value),
+                    maxUserHandles: parseInt(document.getElementById('maxUserHandles').value),
+                    maxTotalHandles: parseInt(document.getElementById('maxTotalHandles').value),
+                    processRecycleThreshold: parseInt(document.getElementById('processRecycleThreshold').value),
+                    maxProcessLifetimeSeconds: parseInt(document.getElementById('maxProcessLifetime').value),
+                    processStartTimeoutSeconds: parseInt(document.getElementById('processStartTimeout').value),
+                    methodCallTimeoutSeconds: parseInt(document.getElementById('methodCallTimeout').value),
+                    recycleCheckCalls: parseInt(document.getElementById('recycleCheckCalls').value),
+                    recycleCheckSeconds: parseInt(document.getElementById('recycleCheckSeconds').value),
+                    verboseWorkerLogging: document.getElementById('verboseWorkerLogging').checked
+                };
+
+                const response = await fetch('/configure?engine=' + engine, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
+
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error('Configuration Failed: ' + (err.detail || response.statusText));
+                }
+            }
+
             async function runBatch(engine, x, y, requestedBatchSize) {
                 if (abortController.signal.aborted) return;
                 const remaining = totalTarget - sentIters;
@@ -299,21 +347,26 @@ app.MapGet("/", () =>
                 document.getElementById('btn-cancel').style.display = 'block';
                 document.getElementById('error-box').style.display = 'none';
                 
-                abortController = new AbortController();
-                startTime = performance.now();
-                const timerInterval = setInterval(() => {
-                    document.getElementById('stat-time').innerText = ((performance.now() - startTime) / 1000).toFixed(1) + 's';
-                }, 100);
-
                 try {
+                    // Call Configure first!
+                    await configurePool();
+
+                    abortController = new AbortController();
+                    startTime = performance.now();
+                    const timerInterval = setInterval(() => {
+                        document.getElementById('stat-time').innerText = ((performance.now() - startTime) / 1000).toFixed(1) + 's';
+                    }, 100);
+
                     const workers = Array(concurrency).fill(0).map(async () => {
                         while (sentIters < totalTarget && !abortController.signal.aborted) {
                             await runBatch(engine, x, y, batchSize);
                         }
                     });
                     await Promise.all(workers);
-                } finally {
                     clearInterval(timerInterval);
+                } catch (ex) {
+                     alert('Run Error: ' + ex.message);
+                } finally {
                     document.getElementById('btn-start').disabled = false;
                     document.getElementById('btn-cancel').style.display = 'none';
                 }
@@ -327,8 +380,69 @@ app.MapGet("/", () =>
     return Results.Content(html, "text/html");
 });
 
+// ---------------------------------------------------------
+// 3. New Configuration Endpoint
+// ---------------------------------------------------------
+app.MapPost("/configure", async (string engine, PoolSettingsModel settings) =>
+{
+    try
+    {
+        // 1. Pick the template (immutable parts)
+        var template = engine == "delphi32" ? templateDelphi : templateC;
+
+        // 2. Build the final config from Template + User Settings
+        var finalConfig = new ProcessPoolConfiguration
+        {
+            // Immutable from template
+            DotNetVersion = template.DotNetVersion,
+            ComClsid = template.ComClsid,
+            ImplementationAssemblyPath = template.ImplementationAssemblyPath,
+            ExtraComDependencies = template.ExtraComDependencies,
+
+            // Mutable from UI
+            MinPoolSize = settings.MinPoolSize,
+            MaxPoolSize = settings.MaxPoolSize,
+            MaxMemoryMB = settings.MaxMemoryMB,
+            MaxGdiHandles = settings.MaxGdiHandles,
+            MaxUserHandles = settings.MaxUserHandles,
+            MaxTotalHandles = settings.MaxTotalHandles,
+            ProcessRecycleThreshold = settings.ProcessRecycleThreshold,
+            VerboseWorkerLogging = settings.VerboseWorkerLogging,
+            RecycleCheckCalls = settings.RecycleCheckCalls,
+            RecycleCheckSeconds = settings.RecycleCheckSeconds,
+
+            // TimeSpans
+            MaxProcessLifetime = TimeSpan.FromSeconds(settings.MaxProcessLifetimeSeconds),
+            ProcessStartTimeout = TimeSpan.FromSeconds(settings.ProcessStartTimeoutSeconds),
+            MethodCallTimeout = TimeSpan.FromSeconds(settings.MethodCallTimeoutSeconds),
+        };
+
+        // 3. Re-Initialize the Proxy
+        // If there was an old one, dispose it (optional cleanup)
+        if (activeProxy is IDisposable oldProxy)
+        {
+            oldProxy.Dispose();
+        }
+
+        activeProxy = await ProcessProxy.CreateAsync<ICalculator>(finalConfig, loggerFactory);
+
+        return Results.Ok();
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new { detail = ex.Message }, statusCode: 500);
+    }
+});
+
+
+// ---------------------------------------------------------
+// 4. Calculate Endpoint (Logic Preserved)
+// ---------------------------------------------------------
 app.MapPost("/calculate", async (HttpRequest request) =>
 {
+    if (activeProxy == null)
+        return Results.Json(new { Success = false, detail = "Proxy not configured. Call /configure first." }, statusCode: 400);
+
     try
     {
         var form = await request.ReadFormAsync();
@@ -337,35 +451,54 @@ app.MapPost("/calculate", async (HttpRequest request) =>
         int batchSize = int.Parse(form["batchSize"]!);
         string engine = form["engine"]!;
 
-        ICalculator activeProxy = engine == "delphi32" ? proxyDelphi32 : proxyC;
-
         var batchResults = new List<object>();
+
         for (int i = 0; i < batchSize; i++)
         {
             try
             {
                 var sum = activeProxy.Add(x, y);
                 var info = activeProxy.GetInfo();
-                batchResults.Add(new { Result = sum.ToString(), EngineJson = info });
+                batchResults.Add(new { Result = sum, EngineJson = info });
             }
             catch (Exception ex)
             {
+                // THIS IS THE SANDBOX PROTECTING YOU
+                // The worker died mid-batch. We report it and stop the batch.
                 batchResults.Add(new
                 {
                     Result = "CRASH",
-                    EngineJson = JsonSerializer.Serialize(new { engine, pid = -1, memoryBytes = 0, handles = 0, error = FlattenException(ex) })
+                    EngineJson = JsonSerializer.Serialize(new
+                    {
+                        engine,
+                        pid = -1,
+                        memoryBytes = 0,
+                        handles = 0,
+                        error = FlattenException(ex)
+                    })
                 });
             }
         }
 
-        return Results.Ok(new { Success = true, HostPid = Environment.ProcessId, Results = batchResults });
+        return Results.Ok(new
+        {
+            Success = true,
+            HostPid = Environment.ProcessId,
+            Results = batchResults
+        });
     }
     catch (Exception ex)
     {
-        return Results.Json(new { Success = false, detail = FlattenException(ex) }, statusCode: 500);
+        // Recursively capture message and stack trace
+        return Results.Json(new
+        {
+            Success = false,
+            detail = FlattenException(ex)
+        }, statusCode: 500);
     }
 });
 
+// Helper to get full stack trace and inner exceptions
 string FlattenException(Exception ex)
 {
     var sb = new StringBuilder();
@@ -383,3 +516,63 @@ string FlattenException(Exception ex)
 }
 
 app.Run();
+
+
+/// <summary>
+/// Model for Pool Settings from UI
+/// </summary>
+public class PoolSettingsModel
+{
+    /// <summary>
+    /// Minimum number of processes in the pool
+    /// </summary>
+    public int MinPoolSize { get; set; }
+    /// <summary>
+    /// Maximum number of processes in the pool
+    /// </summary>
+    public int MaxPoolSize { get; set; }
+    /// <summary>
+    /// Maximum memory per process in MB
+    /// </summary>
+    public long MaxMemoryMB { get; set; }
+    /// <summary>
+    /// Maximum GDI handles per process
+    /// </summary>
+    public int MaxGdiHandles { get; set; }
+    /// <summary>
+    /// Maximum User handles per process
+    /// </summary>
+    public int MaxUserHandles { get; set; }
+    /// <summary>
+    /// Maximum Total handles per process
+    /// </summary>
+    public int MaxTotalHandles { get; set; }
+    /// <summary>
+    /// Number of method calls before recycling a process
+    /// </summary>
+    public int ProcessRecycleThreshold { get; set; }
+    /// <summary>
+    /// Maximum lifetime of a process in seconds
+    /// </summary>
+    public int MaxProcessLifetimeSeconds { get; set; }
+    /// <summary>
+    /// Timeout for process start in seconds
+    /// </summary>
+    public int ProcessStartTimeoutSeconds { get; set; }
+    /// <summary>
+    /// Timeout for method calls in seconds
+    /// </summary>
+    public int MethodCallTimeoutSeconds { get; set; }
+    /// <summary>
+    /// Number of calls between recycle checks
+    /// </summary>
+    public int RecycleCheckCalls { get; set; }
+    /// <summary>
+    /// Number of seconds between recycle checks
+    /// </summary>
+    public int RecycleCheckSeconds { get; set; }
+    /// <summary>
+    /// Enable verbose logging in the worker processes
+    /// </summary>
+    public bool VerboseWorkerLogging { get; set; }
+}
