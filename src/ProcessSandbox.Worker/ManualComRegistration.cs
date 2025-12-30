@@ -145,6 +145,7 @@ public interface IClassFactory
 #if !NET48
 [SupportedOSPlatform("windows")]
 #endif
+[ComVisible(true)]
 public class SimpleManagedFactory : IClassFactory
 {
     private readonly Type _type;
