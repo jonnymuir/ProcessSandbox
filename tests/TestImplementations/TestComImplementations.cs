@@ -63,7 +63,7 @@ public class PrimaryService : IPrimaryService
         uint dwClsContext,
         ref Guid riid,
         out IntPtr ppv);
-    
+
     /// <summary>
     /// Gets a combined report from the internal engine
     /// </summary>
@@ -75,7 +75,12 @@ public class PrimaryService : IPrimaryService
 
         // Test 1: Native call
         int hr = CoCreateInstance(ref clsid, IntPtr.Zero, 1, ref iid, out IntPtr pUnk);
-        if (hr != 0) return $"Native registry check failed: {hr:X}";
+
+        // Even if hr == 1 (S_FALSE), pUnk might be valid. Check the pointer:
+        if (pUnk == IntPtr.Zero)
+        {
+            return "Native creation returned Success (or S_FALSE) but the pointer is null!";
+        }
 
         // Test 2: Managed call
         var engineType = Type.GetTypeFromCLSID(clsid);
