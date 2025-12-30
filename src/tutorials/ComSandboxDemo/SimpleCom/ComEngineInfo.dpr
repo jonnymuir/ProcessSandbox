@@ -29,6 +29,12 @@ type
   TComEngineInfoFactory = class(TComObjectFactory)
   end;
 
+exports
+  DllGetClassObject,
+  DllCanUnloadNow,
+  DllRegisterServer,
+  DllUnregisterServer;
+
 initialization
   TComEngineInfoFactory.Create(ComServer, TComEngineInfo, CLASS_ComEngineInfo,
     'ComEngineInfo', 'Delphi Engine Info Object', ciMultiInstance, tmApartment);
