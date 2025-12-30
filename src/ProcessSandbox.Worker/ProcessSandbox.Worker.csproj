@@ -8,18 +8,24 @@
     <IsPackable>true</IsPackable>
   </PropertyGroup>
 
-  <PropertyGroup Condition="$([System.Text.RegularExpressions.Regex]::IsMatch($(TargetFramework), '^(net\d+\.0-windows)'))">
-    <DefineConstants>WINDOWS</DefineConstants>
+  <PropertyGroup Condition="$(TargetFramework.Contains('-windows'))">
+    <DefineConstants>$(DefineConstants);WINDOWS</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="$(TargetFrameworkIdentifier) == '.NETFramework'">
+    <DefineConstants>$(DefineConstants);WINDOWS;NETFRAMEWORK</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\ProcessSandbox.Abstractions\ProcessSandbox.Abstractions.csproj" />
     <None Include="../../README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
-  
+
   <ItemGroup>
-    <PackageReference Include="MessagePack" Version="$(MessagePackVersion)" /> 
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="$(MicrosoftExtensionsLoggingVersion)" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="$(MicrosoftExtensionsLoggingVersion)" />
+    <PackageReference Include="MessagePack" Version="$(MessagePackVersion)" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions"
+      Version="$(MicrosoftExtensionsLoggingVersion)" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console"
+      Version="$(MicrosoftExtensionsLoggingVersion)" />
   </ItemGroup>
 </Project>
