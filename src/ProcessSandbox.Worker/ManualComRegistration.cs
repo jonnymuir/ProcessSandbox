@@ -161,8 +161,7 @@ public class SimpleManagedFactory : IClassFactory
     /// <exception cref="COMException"></exception>
     public void CreateInstance(IntPtr pUnkOuter, ref Guid riid, out IntPtr ppvObject)
     {
-        throw new Exception($"[Factory] Creating instance for IID: {riid}");
-        /*
+        Console.WriteLine($"[Factory] Creating instance for IID: {riid}");
 
         if (pUnkOuter != IntPtr.Zero) throw new COMException("Aggregation not supported", -2147221232); // CLASS_E_NOAGGREGATION
 
@@ -182,7 +181,6 @@ public class SimpleManagedFactory : IClassFactory
         {
             Marshal.Release(pUnk);
         }
-        */
     }
 
     /// <summary>
