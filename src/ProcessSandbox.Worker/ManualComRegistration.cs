@@ -129,11 +129,13 @@ public interface IClassFactory
     /// <param name="pUnkOuter"></param>
     /// <param name="riid"></param>
     /// <param name="ppvObject"></param>
+    [PreserveSig]
     void CreateInstance(IntPtr pUnkOuter, ref Guid riid, out IntPtr ppvObject);
     /// <summary>
     /// Locks or unlocks the server in memory.
     /// </summary>
     /// <param name="fLock"></param>
+    [PreserveSig]
     void LockServer(bool fLock);
 }
 
