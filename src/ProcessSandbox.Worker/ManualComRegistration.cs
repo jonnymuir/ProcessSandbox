@@ -50,7 +50,6 @@ public class ManualComRegistration : IDisposable
 
     private void RegisterManagedType(string dllPath, Guid clsid)
     {
-#if WINDOWS || NETFRAMEWORK        
         var assembly = Assembly.LoadFrom(dllPath);
         var type = assembly.GetTypes().FirstOrDefault(t =>
             t.IsClass &&
@@ -59,7 +58,9 @@ public class ManualComRegistration : IDisposable
         if (type == null) throw new Exception($"CLSID {clsid} not found.");
 
         // Create the factory wrapper
+#pragma warning disable CA1416 // Validate platform compatibility
         var factory = new SimpleManagedFactory(type);
+#pragma warning restore CA1416 // Validate platform compatibility
 
         // Register the FACTORY, not the object instance
         int hr = ComNative.CoRegisterClassObject(
@@ -71,9 +72,6 @@ public class ManualComRegistration : IDisposable
 
         if (hr != 0) throw new Exception($"CoRegisterClassObject failed: {hr:X}");
         _registrationCookies.Add(cookie);
-#else
-    throw new PlatformNotSupportedException("COM registration only supported on Windows.");
-#endif
     }
 
     private void RegisterNativeDll(string dllPath, Guid clsid)

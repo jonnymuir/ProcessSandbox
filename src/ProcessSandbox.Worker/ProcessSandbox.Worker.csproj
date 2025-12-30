@@ -8,14 +8,6 @@
     <IsPackable>true</IsPackable>
   </PropertyGroup>
 
-  <PropertyGroup Condition="$(TargetFramework.Contains('-windows'))">
-    <DefineConstants>$(DefineConstants);WINDOWS</DefineConstants>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="$(TargetFrameworkIdentifier) == '.NETFramework'">
-    <DefineConstants>$(DefineConstants);WINDOWS;NETFRAMEWORK</DefineConstants>
-  </PropertyGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\ProcessSandbox.Abstractions\ProcessSandbox.Abstractions.csproj" />
     <None Include="../../README.md" Pack="true" PackagePath="\" />
