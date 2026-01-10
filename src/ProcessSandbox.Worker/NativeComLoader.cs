@@ -7,8 +7,12 @@ namespace ProcessSandbox.Worker;
 /// <summary>
 /// Loads Native COM DLLs directly without registration
 /// </summary>
-public static class NativeComLoader
+public class NativeComLoader : ILoader
 {
+    private readonly IntPtr hModule;
+    private Guid clsid;
+    private readonly Type interfaceType;
+
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern IntPtr LoadLibrary(string lpFileName);
 
@@ -34,15 +38,15 @@ public static class NativeComLoader
     }
 
     /// <summary>
-    /// Creates an instance of a native COM object from a DLL without registration
+    /// Creates an instance of the COM object from the native DLL.
     /// </summary>
     /// <param name="dllPath"></param>
     /// <param name="clsid"></param>
     /// <param name="interfaceType"></param>
-    /// <returns></returns>
+    /// <exception cref="PlatformNotSupportedException"></exception>
     /// <exception cref="Exception"></exception>
     /// <exception cref="COMException"></exception>
-    public static object CreateInstance(string dllPath, Guid clsid, Type interfaceType)
+    public NativeComLoader(string dllPath, Guid clsid, Type interfaceType)
     {
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
@@ -51,10 +55,30 @@ public static class NativeComLoader
                 "Check your configuration or deployment environment.");
         }
 
-        IntPtr hModule = LoadLibrary(dllPath);
+        hModule = LoadLibrary(dllPath);
         if (hModule == IntPtr.Zero)
             throw new Exception($"Native DLL failed to load: {dllPath}");
 
+        this.clsid = clsid;
+        this.interfaceType = interfaceType;
+
+    }
+
+    /// <summary>
+    /// Creates an instance of the COM object from the native DLL.
+    /// </summary>
+    /// <returns></returns>
+    /// <exception cref="Exception"></exception>
+    /// <exception cref="COMException"></exception>
+    public object CreateInstance()
+    {
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            throw new PlatformNotSupportedException(
+                "Direct COM loading is only supported on Windows. " +
+                "Check your configuration or deployment environment.");
+        }
+        
         IntPtr pAddress = GetProcAddress(hModule, "DllGetClassObject");
         if (pAddress == IntPtr.Zero)
             throw new Exception("DllGetClassObject not found in DLL.");
@@ -86,5 +110,16 @@ public static class NativeComLoader
             // Clean up the factory pointer
             if (pFactory != IntPtr.Zero) Marshal.Release(pFactory);
         }
+
     }
+
+    /// <summary>
+    /// Gets the target type.
+    /// </summary>
+    /// <returns></returns>
+    public Type GetTargetType()
+    {
+        return interfaceType;
+    }
+
 }

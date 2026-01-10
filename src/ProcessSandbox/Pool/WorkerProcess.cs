@@ -39,6 +39,11 @@ public class WorkerProcess(ProcessPoolConfiguration config, ILogger<WorkerProces
     public string WorkerId => _workerId;
 
     /// <summary>
+    /// Gets or sets a value indicating whether this worker is on the first command in a sequence of commands.
+    /// </summary>
+    public bool FirstInSequence = true;
+
+    /// <summary>
     /// Gets a value indicating whether the worker is running and connected.
     /// </summary>
     public bool IsHealthy => _process != null && !_process.HasExited && _channel?.IsConnected == true;
@@ -281,7 +286,9 @@ public class WorkerProcess(ProcessPoolConfiguration config, ILogger<WorkerProces
             throw new ObjectDisposedException(nameof(WorkerProcess));
 
         if (!IsHealthy)
-            throw new WorkerCrashedException("Worker is not healthy");
+        {
+            throw new WorkerCrashedException($"Worker is not healthy: {_workerId}");
+        }
 
         await _usageLock.WaitAsync(cancellationToken);
         try
@@ -297,6 +304,7 @@ public class WorkerProcess(ProcessPoolConfiguration config, ILogger<WorkerProces
                 invocation.MethodName,
                 _workerId);
 
+            FirstInSequence = false;
             return result;
         }
         finally

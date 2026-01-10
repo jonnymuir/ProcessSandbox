@@ -8,6 +8,7 @@ using ProcessSandbox.Proxy;
 using ProcessSandbox.Tests.TestImplementations;
 using ProcessSandbox.Abstractions;
 using Microsoft.Extensions.Logging.Abstractions;
+using System.Reflection.Metadata.Ecma335;
 
 namespace ProcessSandbox.Tests.Integration;
 
@@ -51,12 +52,47 @@ public class EndToEndTests : IDisposable
         var config = CreateTestConfiguration(typeof(TestServiceImpl));
 
         // Act
-        var proxy = await ProcessProxy.CreateAsync<ITestService>(config, _loggerFactory);
-        var result = proxy.Echo("Hello");
+        var factory = await ProcessProxyFactory<ITestService>.CreateAsync(config, _loggerFactory);
+
+        string result = string.Empty;
+
+        await factory.UseProxyAsync(async proxy =>
+        {
+            result = proxy.Echo("Hello");
+        });
 
         // Assert
         Assert.Equal("Hello", result);
     }
+
+    /// <summary>
+    /// Tests basic method invocation through the proxy.
+    /// </summary>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    [Fact]
+    public async Task Proxy_SequentialMethodInvocation()
+    {
+
+        // Arrange
+        var config = CreateTestConfiguration(typeof(TestServiceImpl));
+
+        // Act
+        var factory = await ProcessProxyFactory<ITestService>.CreateAsync(config, _loggerFactory);
+
+        string result = string.Empty;
+
+        await factory.UseProxyAsync(async proxy =>
+        {
+            result = proxy.Echo("Hello");
+            result = proxy.Echo("Hello2");
+            result = proxy.Echo("Hello3");
+        });
+
+        // Assert
+        Assert.Equal("Hello3", result);
+    }
+
+
 
     /// <summary>
     /// Tests method with multiple parameters.
@@ -69,8 +105,14 @@ public class EndToEndTests : IDisposable
         var config = CreateTestConfiguration(typeof(TestServiceImpl));
 
         // Act
-        var proxy = await ProcessProxy.CreateAsync<ITestService>(config, _loggerFactory);
-        var result = proxy.Add(5, 3);
+        var factory = await ProcessProxyFactory<ITestService>.CreateAsync(config, _loggerFactory);
+
+        int result = 0;
+
+        await factory.UseProxyAsync(async proxy =>
+        {
+            result = proxy.Add(5, 3);
+        });
 
         // Assert
         Assert.Equal(8, result);
@@ -87,9 +129,11 @@ public class EndToEndTests : IDisposable
         var config = CreateTestConfiguration(typeof(TestServiceImpl));
 
         // Act
-        var proxy = await ProcessProxy.CreateAsync<ITestService>(config, _loggerFactory);
-        proxy.DoNothing(); // Should not throw
-
+        var factory = await ProcessProxyFactory<ITestService>.CreateAsync(config, _loggerFactory);
+        await factory.UseProxyAsync(async proxy =>
+        {
+            proxy.DoNothing(); // Should not throw
+        });
         // Assert - no exception thrown
     }
 
@@ -104,12 +148,18 @@ public class EndToEndTests : IDisposable
         var config = CreateTestConfiguration(typeof(ThrowingServiceImpl));
 
         // Act
-        var proxy = await ProcessProxy.CreateAsync<ITestService>(config, _loggerFactory);
+        var factory = await ProcessProxyFactory<ITestService>.CreateAsync(config, _loggerFactory);
 
         // Assert
-        var ex = Assert.Throws<Abstractions.RemoteInvocationException>(() => proxy.Echo("test"));
+        RemoteInvocationException ex = null!;
+        
+        await factory.UseProxyAsync(async proxy =>
+        {
+            ex = Assert.Throws<Abstractions.RemoteInvocationException>(() => proxy.Echo("test"));
+        });
+
         Assert.Contains("Echo failed", ex.Message);
-    }
+}
 
     /// <summary>
     /// Tests concurrent method invocations.
@@ -127,7 +177,7 @@ public class EndToEndTests : IDisposable
         var config = CreateTestConfiguration(typeof(TestServiceImpl));
         config.MaxPoolSize = 3;
 
-        var proxy = await ProcessProxy.CreateAsync<ITestService>(config, _loggerFactory);
+        var factory = await ProcessProxyFactory<ITestService>.CreateAsync(config, _loggerFactory);
 
         logger.LogInformation("ProcessProxy created. Starting concurrent invocations.");
 
@@ -138,7 +188,12 @@ public class EndToEndTests : IDisposable
             var a = i;
             var b = i + 1;
             logger.LogInformation("Starting task {TaskNumber} to add {A} and {B}.", i, a, b);
-            tasks[i] = Task.Run(() => proxy.Add(a, b));
+            tasks[i] = Task.Run(async () => 
+            {
+                int ret = 0;
+                await factory.UseProxyAsync(async proxy => ret = proxy.Add(a, b));
+                return ret;
+            });
         }
 
         logger.LogInformation("All tasks started. Awaiting results.");
@@ -162,15 +217,40 @@ public class EndToEndTests : IDisposable
     {
         // Arrange
         var config = CreateTestConfiguration(typeof(TestServiceImpl));
-        var proxy = await ProcessProxy.CreateAsync<ITestService>(config, _loggerFactory);
+        var factory = await ProcessProxyFactory<ITestService>.CreateAsync(config, _loggerFactory);
 
         var input = new byte[] { 1, 2, 3, 4, 5 };
 
         // Act
-        var result = proxy.ProcessBytes(input);
+        byte[] result = null!;
+        await factory.UseProxyAsync(async proxy => result = proxy.ProcessBytes(input));
 
         // Assert
         Assert.Equal(new byte[] { 2, 3, 4, 5, 6 }, result);
+    }
+
+    /// <summary>
+    /// Tests using a factory to create the proxy.
+    /// </summary>
+    /// <returns></returns>
+    [Fact]
+    public async Task Proxy_Using_a_factory_with_IDispose_keeps_the_same_object_reference()
+    {
+        // Arrange
+        var config = CreateTestConfiguration(typeof(TestServiceImpl));
+
+        // Act
+        var factory = await ProcessProxyFactory<ITestService>.CreateAsync(config, _loggerFactory);
+
+        string result = string.Empty;
+
+        await factory.UseProxyAsync(async proxy => {
+            proxy.Set("Hello");
+            result = proxy.Read();
+        });
+
+        // Assert
+        Assert.Equal("Hello", result);
     }
 
     /// <summary>
@@ -201,8 +281,9 @@ public class EndToEndTests : IDisposable
         };
 
         // Act
-        var proxy = await ProcessProxy.CreateAsync<IPrimaryService>(config, _loggerFactory);
-        var result = proxy.GetCombinedReport();
+        var factory = await ProcessProxyFactory<IPrimaryService>.CreateAsync(config, _loggerFactory);
+        string result = string.Empty;
+        await factory.UseProxyAsync(async proxy => result = proxy.GetCombinedReport());;
 
         // Assert
         Assert.Equal("Success: C# Internal Engine Active", result);

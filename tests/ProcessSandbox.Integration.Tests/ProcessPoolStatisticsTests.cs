@@ -68,8 +68,13 @@ public class ProcessPoolStatisticsTests
             SerializedParameters = Abstractions.SerializationHelper.SerializeParameters(new object[] { "test" })
         };
 
-        await pool.ExecuteAsync(invocation);
-        await pool.ExecuteAsync(invocation);
+        var worker = await pool.GetAvailableWorkerAsync();
+        await worker.InvokeMethodAsync(invocation);
+        pool.ReturnWorker(worker);
+
+        worker = await pool.GetAvailableWorkerAsync();
+        await worker.InvokeMethodAsync(invocation);
+        pool.ReturnWorker(worker);
 
         var stats2 = pool.GetStatistics();
 

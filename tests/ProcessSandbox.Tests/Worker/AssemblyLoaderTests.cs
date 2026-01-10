@@ -25,12 +25,12 @@ public class AssemblyLoaderTests
     public void LoadAndCreateInstance_ValidAssembly_CreatesInstance()
     {
         // Arrange
-        var loader = new AssemblyLoader(NullLogger<AssemblyLoader>.Instance);
         var assemblyPath = typeof(TestServiceImpl).Assembly.Location;
         var typeName = typeof(TestServiceImpl).FullName!;
+        var loader = new AssemblyLoader(NullLogger<AssemblyLoader>.Instance,assemblyPath, typeName);
 
         // Act
-        var instance = loader.LoadAndCreateInstance(assemblyPath, typeName);
+        var instance = loader.CreateInstance();
 
         // Assert
         Assert.NotNull(instance);
@@ -44,13 +44,12 @@ public class AssemblyLoaderTests
     public void LoadAndCreateInstance_NonExistentAssembly_ThrowsException()
     {
         // Arrange
-        var loader = new AssemblyLoader(NullLogger<AssemblyLoader>.Instance);
         var assemblyPath = "nonexistent.dll";
         var typeName = "NonExistent.Type";
 
         // Act & Assert
         Assert.Throws<AssemblyLoadException>(
-            () => loader.LoadAndCreateInstance(assemblyPath, typeName));
+            () => new AssemblyLoader(NullLogger<AssemblyLoader>.Instance,assemblyPath, typeName));
     }
 
     /// <summary>
@@ -60,32 +59,11 @@ public class AssemblyLoaderTests
     public void LoadAndCreateInstance_NonExistentType_ThrowsException()
     {
         // Arrange
-        var loader = new AssemblyLoader(NullLogger<AssemblyLoader>.Instance);
         var assemblyPath = typeof(TestServiceImpl).Assembly.Location;
         var typeName = "NonExistent.Type";
 
         // Act & Assert
         Assert.Throws<AssemblyLoadException>(
-            () => loader.LoadAndCreateInstance(assemblyPath, typeName));
-    }
-
-    /// <summary>
-    /// Loads a valid assembly and creates an instance with constructor arguments successfully.
-    /// </summary>
-    [Fact]
-    public void LoadAndCreateInstance_WithConstructorArgs_CreatesInstance()
-    {
-        // Arrange
-        var loader = new AssemblyLoader(NullLogger<AssemblyLoader>.Instance);
-        var assemblyPath = typeof(SlowServiceImpl).Assembly.Location;
-        var typeName = typeof(SlowServiceImpl).FullName!;
-        var args = new object[] { 500 }; // delay in ms
-
-        // Act
-        var instance = loader.LoadAndCreateInstance(assemblyPath, typeName, args);
-
-        // Assert
-        Assert.NotNull(instance);
-        Assert.IsType<SlowServiceImpl>(instance);
+            () => new AssemblyLoader(NullLogger<AssemblyLoader>.Instance,assemblyPath, typeName));
     }
 }

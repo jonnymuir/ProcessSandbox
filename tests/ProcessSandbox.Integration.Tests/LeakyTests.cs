@@ -27,7 +27,7 @@ public class LeakyTests : IDisposable
         _loggerFactory = LoggerFactory.Create(builder =>
         {
             // Minimum level for logging (e.g., Information, Debug, or Trace)
-            builder.SetMinimumLevel(LogLevel.Warning);
+            builder.SetMinimumLevel(LogLevel.Debug);
 
             // Add the Debug provider
             builder.AddDebug();
@@ -60,13 +60,16 @@ public class LeakyTests : IDisposable
 
         };
 
-        var proxy = await ProcessProxy.CreateAsync<ITestService>(config, _loggerFactory);
+        var factory = await ProcessProxyFactory<ITestService>.CreateAsync(config, _loggerFactory);
         int totalIterations = 0;
         // Act
         for (int i = 0; i < 100; i++)
         {
-            string result = proxy.Echo("memoryleak:50");
-            proxy.DoNothing();
+            await factory.UseProxyAsync(async proxy =>
+            {
+                string result = proxy.Echo("memoryleak:50");
+                proxy.DoNothing();
+            });
             // Assert
             totalIterations++;
         }
@@ -98,7 +101,7 @@ public class LeakyTests : IDisposable
 
         };
 
-        var proxy = await ProcessProxy.CreateAsync<ITestService>(config, _loggerFactory);
+        var factory = await ProcessProxyFactory<ITestService>.CreateAsync(config, _loggerFactory);
         int totalIterations = 0;
 
         var tasks = new List<Task>();
@@ -110,14 +113,17 @@ public class LeakyTests : IDisposable
         {
             await semaphore.WaitAsync();
 
-            var task = Task.Run(() =>
+            var task = Task.Run(async () =>
             {
                 try
                 {
-                    if (proxy.Echo("memoryleak:50") == "memoryleak:50")
+                    await factory.UseProxyAsync(async proxy =>
                     {
-                        Interlocked.Increment(ref totalIterations);
-                    }
+                        if (proxy.Echo("memoryleak:50") == "memoryleak:50")
+                        {
+                            Interlocked.Increment(ref totalIterations);
+                        }
+                    });
                 }
                 finally
                 {
@@ -147,14 +153,14 @@ public class LeakyTests : IDisposable
             ImplementationTypeName = typeof(LeakyServiceImpl).FullName!,
         };
 
-        var proxy = await ProcessProxy.CreateAsync<ITestService>(config, _loggerFactory);
+        var factory = await ProcessProxyFactory<ITestService>.CreateAsync(config, _loggerFactory);
 
         // 1. Verify the crash is caught and reported correctly
         // We expect a RemoteInvocationException (or your specific WorkerCrashedException)
         var exception = await Assert.ThrowsAsync<WorkerCrashedException>(async () =>
         {
             // This call will trigger the 'unsafe' crash in the worker
-            await Task.Run(() => proxy.Echo("crash"));
+            await factory.UseProxyAsync(async proxy => proxy.Echo("crash"));
         });
 
         // Check if the message indicates a process failure rather than a logical app error
@@ -162,7 +168,9 @@ public class LeakyTests : IDisposable
 
         // 2. Verify Self-Healing: The next call should work!
         // The Pool should have detected the exit of the previous process and give us a fresh one.
-        string recoveryResult = proxy.Echo("I am alive");
+        string recoveryResult = string.Empty;
+        
+        await factory.UseProxyAsync(async proxy => recoveryResult = proxy.Echo("I am alive"));
 
         Assert.Equal("I am alive", recoveryResult);
     }

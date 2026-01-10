@@ -7,27 +7,25 @@ using ProcessSandbox.Abstractions;
 namespace ProcessSandbox.Worker;
 
 /// <summary>
-/// Loads assemblies and creates instances of types dynamically.
+/// Loads assemblies and creates instances of specified types.
 /// </summary>
-/// <remarks>
-/// 
-/// </remarks>
-/// <param name="logger"></param>
-/// <exception cref="ArgumentNullException"></exception>
-public class AssemblyLoader(ILogger<AssemblyLoader> logger)
+public class AssemblyLoader : ILoader
 {
+    private readonly ILogger<AssemblyLoader> logger;
+    private readonly string assemblyPath;
+    private readonly string typeName;
+    private readonly Type targetType;
+
     /// <summary>
     /// Loads an assembly and creates an instance of the specified type.
     /// </summary>
-    /// <param name="assemblyPath">Path to the assembly file.</param>
-    /// <param name="typeName">Full name of the type to instantiate.</param>
-    /// <returns>An instance of the specified type.</returns>
-    public object LoadAndCreateInstance(string assemblyPath, string typeName)
+    /// <exception cref="ArgumentNullException"></exception>
+    /// <exception cref="AssemblyLoadException"></exception>
+    public AssemblyLoader(ILogger<AssemblyLoader> logger, string assemblyPath, string typeName)
     {
-        if (string.IsNullOrWhiteSpace(assemblyPath))
-            throw new ArgumentNullException(nameof(assemblyPath));
-        if (string.IsNullOrWhiteSpace(typeName))
-            throw new ArgumentNullException(nameof(typeName));
+        this.logger = logger;
+        this.assemblyPath = assemblyPath;
+        this.typeName = typeName;
 
         logger.LogInformation("Loading assembly: {AssemblyPath}", assemblyPath);
 
@@ -55,27 +53,27 @@ public class AssemblyLoader(ILogger<AssemblyLoader> logger)
         }
 
         // Find the type
-        Type? targetType = null;
+        Type? type = null;
         
         try
         {
             // Try exact match first
-            targetType = assembly.GetType(typeName, throwOnError: false);
+            type = assembly.GetType(typeName, throwOnError: false);
 
             // If not found, try case-insensitive search
-            if (targetType == null)
+            if (type == null)
             {
-                foreach (var type in assembly.GetTypes())
+                foreach (var assemblyType in assembly.GetTypes())
                 {
-                    if (string.Equals(type.FullName, typeName, StringComparison.OrdinalIgnoreCase))
+                    if (string.Equals(assemblyType.FullName, typeName, StringComparison.OrdinalIgnoreCase))
                     {
-                        targetType = type;
+                        type = assemblyType;
                         break;
                     }
                 }
             }
 
-            if (targetType == null)
+            if (type == null)
             {
                 throw new AssemblyLoadException(
                     $"Type '{typeName}' not found in assembly '{assembly.FullName}'",
@@ -83,7 +81,9 @@ public class AssemblyLoader(ILogger<AssemblyLoader> logger)
                     typeName);
             }
 
-            logger.LogInformation("Type found: {TypeName}", targetType.FullName);
+            logger.LogInformation("Type found: {TypeName}", type.FullName);
+
+            targetType = type;
         }
         catch (Exception ex) when (ex is not AssemblyLoadException)
         {
@@ -91,7 +91,14 @@ public class AssemblyLoader(ILogger<AssemblyLoader> logger)
                 $"Failed to find type '{typeName}' in assembly {assemblyPath}",
                 ex);
         }
+    }
 
+    /// <summary>
+    /// Creates an instance
+    /// </summary>
+    /// <returns>An instance of the specified type.</returns>
+    public object CreateInstance()
+    {
         // Create instance
         object instance;
         try
@@ -116,65 +123,11 @@ public class AssemblyLoader(ILogger<AssemblyLoader> logger)
     }
 
     /// <summary>
-    /// Loads an assembly and creates an instance with constructor parameters.
+    /// Gets the target type.
     /// </summary>
-    /// <param name="assemblyPath">Path to the assembly file.</param>
-    /// <param name="typeName">Full name of the type to instantiate.</param>
-    /// <param name="constructorArgs">Constructor arguments.</param>
-    /// <returns>An instance of the specified type.</returns>
-    public object LoadAndCreateInstance(
-        string assemblyPath, 
-        string typeName, 
-        object[] constructorArgs)
+    /// <returns></returns>
+    public Type GetTargetType()
     {
-
-        logger.LogInformation("Loading assembly with constructor args: {AssemblyPath}", assemblyPath);
-
-        var fullPath = Path.GetFullPath(assemblyPath);
-        if (!File.Exists(fullPath))
-        {
-            throw new AssemblyLoadException(
-                $"Assembly file not found: {fullPath}",
-                assemblyPath);
-        }
-
-        Assembly assembly;
-        try
-        {
-            assembly = Assembly.LoadFrom(fullPath);
-        }
-        catch (Exception ex)
-        {
-            throw new AssemblyLoadException(
-                $"Failed to load assembly from {fullPath}",
-                ex);
-        }
-
-        Type? targetType = assembly.GetType(typeName, throwOnError: false);
-        if (targetType == null)
-        {
-            throw new AssemblyLoadException(
-                $"Type '{typeName}' not found in assembly '{assembly.FullName}'",
-                assemblyPath,
-                typeName);
-        }
-
-        try
-        {
-            var instance = Activator.CreateInstance(targetType, constructorArgs)
-                ?? throw new AssemblyLoadException(
-                    $"Activator.CreateInstance returned null for type {targetType.FullName}",
-                    assemblyPath,
-                    typeName);
-
-            logger.LogInformation("Instance created with constructor args");
-            return instance;
-        }
-        catch (Exception ex)
-        {
-            throw new AssemblyLoadException(
-                $"Failed to create instance of type '{targetType.FullName}' with provided constructor arguments.",
-                ex);
-        }
-    }
+        return targetType;
+    }   
 }

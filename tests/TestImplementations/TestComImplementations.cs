@@ -39,7 +39,7 @@ public class InternalEngine : IInternalEngine
 [ComVisible(true)]
 [Guid("11111111-1111-1111-1111-111111111111")]
 [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-public interface IPrimaryService
+public interface IPrimaryService : IDisposable
 {
     /// <summary>
     /// Gets a combined report from the internal engine
@@ -63,6 +63,14 @@ public class PrimaryService : IPrimaryService
         uint dwClsContext,
         ref Guid riid,
         out IntPtr ppv);
+
+    /// <summary>
+    /// Disposes the PrimaryService instance
+    /// </summary>
+    public void Dispose()
+    {
+        
+    }
 
     /// <summary>
     /// Gets a combined report from the internal engine

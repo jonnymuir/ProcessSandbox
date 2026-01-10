@@ -6,7 +6,7 @@ namespace ProcessSandbox.Tests.TestImplementations;
 /// <summary>
 /// Simple test service interface.
 /// </summary>
-public interface ITestService
+public interface ITestService : IDisposable
 {
     /// <summary>
     /// Echoes the input string.
@@ -31,6 +31,18 @@ public interface ITestService
     /// <param name="data"></param>
     /// <returns></returns>
     byte[] ProcessBytes(byte[] data);
+
+    /// <summary>
+    /// Set
+    /// </summary>
+    /// <param name="value"></param>
+    void Set(string value);
+    
+    /// <summary>
+    /// Read
+    /// </summary>
+    /// <returns></returns>
+    string Read();
 }
 
 /// <summary>
@@ -38,6 +50,8 @@ public interface ITestService
 /// </summary>
 public class TestServiceImpl : ITestService
 {
+    private string value = string.Empty;
+
     /// <summary>
     /// Echoes the input string.
     /// </summary>
@@ -83,6 +97,33 @@ public class TestServiceImpl : ITestService
             result[i] = (byte)(data[i] + 1);
         }
         return result;
+    }
+
+    /// <summary>
+    /// Set method 
+    /// </summary>
+    /// <param name="value"></param>
+    /// <exception cref="NotImplementedException"></exception>
+    public void Set(string value)
+    {
+        this.value = value;
+    }
+
+    /// <summary>
+    /// Read method
+    /// </summary>
+    /// <returns></returns>
+    /// <exception cref="NotImplementedException"></exception>
+    public string Read()
+    {
+        return value;
+    }
+
+    /// <summary>
+    /// Disposes the service.
+    /// </summary>
+    public void Dispose()
+    {
     }
 }
 
@@ -133,6 +174,34 @@ public class ThrowingServiceImpl : ITestService
     {
         throw new ArgumentException("Invalid bytes");
     }
+
+    /// <summary>
+    /// Set method that always throws an exception.
+    /// </summary>
+    /// <param name="value"></param>
+    /// <exception cref="NotImplementedException"></exception>
+    public void Set(string value)
+    {
+        throw new NotImplementedException();
+    }
+
+    /// <summary>
+    /// Read method that always throws an exception.
+    /// </summary>
+    /// <returns></returns>
+    /// <exception cref="NotImplementedException"></exception>
+    public string Read()
+    {
+        throw new NotImplementedException();
+    }
+
+    /// <summary>
+    /// Disposes the service.
+    /// </summary>
+    public void Dispose()
+    {
+    }
+
 }
 
 /// <summary>
@@ -199,6 +268,35 @@ public class SlowServiceImpl : ITestService
         Thread.Sleep(_delayMs);
         return data;
     }
+
+    /// <summary>
+    /// Set method that always throws an exception.
+    /// </summary>
+    /// <param name="value"></param>
+    /// <exception cref="NotImplementedException"></exception>
+    public void Set(string value)
+    {
+        throw new NotImplementedException();
+    }
+
+    /// <summary>
+    /// Read method that always throws an exception.
+    /// </summary>
+    /// <returns></returns>
+    /// <exception cref="NotImplementedException"></exception>
+    public string Read()
+    {
+        throw new NotImplementedException();
+    }
+
+    /// <summary>
+    /// Disposes the service.
+    /// </summary>
+    public void Dispose()
+    {
+    }
+
+
 }
 
 /// <summary>
@@ -206,7 +304,7 @@ public class SlowServiceImpl : ITestService
 /// </summary>
 public class StatefulServiceImpl : ITestService
 {
-    private int _callCount;
+    private static int _callCount;
 
     /// <summary>
     /// Gets the number of method calls made to this service.
@@ -254,6 +352,34 @@ public class StatefulServiceImpl : ITestService
         Interlocked.Increment(ref _callCount);
         return data;
     }
+
+    /// <summary>
+    /// Set method that always throws an exception.
+    /// </summary>
+    /// <param name="value"></param>
+    /// <exception cref="NotImplementedException"></exception>
+    public void Set(string value)
+    {
+        throw new NotImplementedException();
+    }
+
+    /// <summary>
+    /// Read method that always throws an exception.
+    /// </summary>
+    /// <returns></returns>
+    /// <exception cref="NotImplementedException"></exception>
+    public string Read()
+    {
+        throw new NotImplementedException();
+    }
+
+    /// <summary>
+    /// Disposes the service.
+    /// </summary>
+    public void Dispose()
+    {
+    }
+
 }
 
 /// <summary>
@@ -322,4 +448,32 @@ public class LeakyServiceImpl : ITestService
     {
         return data;
     }
+
+    /// <summary>
+    /// Set method that always throws an exception.
+    /// </summary>
+    /// <param name="value"></param>
+    /// <exception cref="NotImplementedException"></exception>
+    public void Set(string value)
+    {
+        throw new NotImplementedException();
+    }
+
+    /// <summary>
+    /// Read method that always throws an exception.
+    /// </summary>
+    /// <returns></returns>
+    /// <exception cref="NotImplementedException"></exception>
+    public string Read()
+    {
+        throw new NotImplementedException();
+    }
+
+    /// <summary>
+    /// Disposes the service.
+    /// </summary>
+    public void Dispose()
+    {
+    }
+
 }

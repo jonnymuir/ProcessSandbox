@@ -15,9 +15,8 @@ namespace ProcessSandbox.Worker;
 /// </remarks>
 /// <param name="targetInstance"></param>
 /// <param name="targetType"></param>
-/// <param name="logger"></param>
 /// <exception cref="ArgumentNullException"></exception>
-public class MethodInvoker(object targetInstance, Type targetType, ILogger<MethodInvoker> logger)
+public class MethodInvoker(object targetInstance, Type targetType)
 {
     /// <summary>
     /// Invokes a method based on the invocation message.
@@ -61,8 +60,6 @@ public class MethodInvoker(object targetInstance, Type targetType, ILogger<Metho
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error invoking method: {Method}", invocation.MethodName);
-
             // Unwrap TargetInvocationException to get the real exception
             var actualException = ex is TargetInvocationException tie && tie.InnerException != null
                 ? tie.InnerException
@@ -115,10 +112,6 @@ public class MethodInvoker(object targetInstance, Type targetType, ILogger<Metho
                 return candidate;
         }
 
-        // No exact match, return first overload (may fail at invoke time)
-        logger.LogWarning(
-            "Multiple overloads found for {Method}, using first match",
-            methodName);
         return methods[0];
     }
 }

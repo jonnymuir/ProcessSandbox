@@ -15,17 +15,77 @@ namespace ProcessSandbox.Worker;
 /// <remarks>
 /// Creates a new worker host.
 /// </remarks>
-/// <param name="config"></param>
-/// <param name="loggerFactory"></param>
 /// <exception cref="ArgumentNullException"></exception>
-public class WorkerHost(WorkerConfiguration config, ILoggerFactory loggerFactory) : IDisposable
+public class WorkerHost : IDisposable
 {
-    private readonly ILogger<WorkerHost> _logger = loggerFactory.CreateLogger<WorkerHost>();
-    private readonly CancellationTokenSource _shutdownCts = new CancellationTokenSource();
+    private readonly ILogger<WorkerHost> _logger; private readonly CancellationTokenSource _shutdownCts = new CancellationTokenSource();
 
     private NamedPipeServerChannel? _channel;
-    private MethodInvoker? _methodInvoker;
+    private readonly ILoader _loader;
+
+    private object? _targetInstance = null;
     private bool _disposed;
+    private readonly string _pipeName;
+
+    /// <summary>
+    /// The worker configuration.
+    /// </summary>
+    /// <param name="config"></param>
+    /// <param name="loggerFactory"></param>
+    /// <exception cref="ArgumentNullException"></exception>
+    public WorkerHost(WorkerConfiguration config, ILoggerFactory loggerFactory)
+    {
+        this._logger = loggerFactory.CreateLogger<WorkerHost>();
+        // ---------------------------------------------------------
+        // 1. DETERMINISTIC LOADING STRATEGY
+        // ---------------------------------------------------------
+
+        // Check if this is a Native COM activation request
+        // We can detect this if a CLSID is provided in config, OR by checking the file header.
+        // Here we use a Try/Catch approach on AssemblyName.GetAssemblyName for robustness.
+        bool isManagedAssembly = true;
+        try
+        {
+            AssemblyName.GetAssemblyName(config.AssemblyPath);
+        }
+        catch (BadImageFormatException)
+        {
+            isManagedAssembly = false;
+        }
+
+        if (isManagedAssembly)
+        {
+            // -- STRATEGY A: MANAGED ASSEMBLY --
+            _logger.LogInformation("Detected Managed Assembly. Loading via Reflection...");
+            _loader = new AssemblyLoader(loggerFactory.CreateLogger<AssemblyLoader>(), config.AssemblyPath, config.TypeName);
+        }
+        else
+        {
+            // -- STRATEGY B: NATIVE DIRECT COM --
+            _logger.LogInformation("Detected Native DLL. Attempting Direct COM Load...");
+
+            Guid clsid;
+
+            if (config.ComClsid != Guid.Empty)
+            {
+                clsid = config.ComClsid;
+            }
+            else
+            {
+                throw new ArgumentException("Native COM loading requires a CLSID. Pass it in config or append to TypeName (Type|GUID).");
+            }
+
+            var targetType = ResolveInterfaceType(config.TypeName)
+                         ?? throw new Exception($"Could not find Interface Type '{config.TypeName}'");
+
+
+            _loader = new NativeComLoader(config.AssemblyPath, clsid, targetType);
+        }
+
+        _logger.LogInformation("Target instance created. Type: {Type}", _loader.GetTargetType().FullName);
+
+        this._pipeName = config.PipeName;
+    }
 
     /// <summary>
     /// Runs the worker host until shutdown is requested.
@@ -37,76 +97,11 @@ public class WorkerHost(WorkerConfiguration config, ILoggerFactory loggerFactory
 
         try
         {
-            object targetInstance;
-            Type targetType;
-
             // ---------------------------------------------------------
-            // 1. DETERMINISTIC LOADING STRATEGY
+            // 2. START IPC
             // ---------------------------------------------------------
-
-            // Check if this is a Native COM activation request
-            // We can detect this if a CLSID is provided in config, OR by checking the file header.
-            // Here we use a Try/Catch approach on AssemblyName.GetAssemblyName for robustness.
-            bool isManagedAssembly = true;
-            try
-            {
-                AssemblyName.GetAssemblyName(config.AssemblyPath);
-            }
-            catch (BadImageFormatException)
-            {
-                isManagedAssembly = false;
-            }
-
-            if (isManagedAssembly)
-            {
-                // -- STRATEGY A: MANAGED ASSEMBLY --
-                _logger.LogInformation("Detected Managed Assembly. Loading via Reflection...");
-                var loader = new AssemblyLoader(loggerFactory.CreateLogger<AssemblyLoader>());
-                targetInstance = loader.LoadAndCreateInstance(config.AssemblyPath, config.TypeName);
-                targetType = targetInstance.GetType();
-            }
-            else
-            {
-                // -- STRATEGY B: NATIVE DIRECT COM --
-                _logger.LogInformation("Detected Native DLL. Attempting Direct COM Load...");
-
-                Guid clsid;
-
-                if (config.ComClsid != Guid.Empty)
-                {
-                    clsid = config.ComClsid;
-                }
-                else
-                {
-                    throw new ArgumentException("Native COM loading requires a CLSID. Pass it in config or append to TypeName (Type|GUID).");
-                }
-
-                targetType = ResolveInterfaceType(config.TypeName) 
-                             ?? throw new Exception($"Could not find Interface Type '{config.TypeName}'");
-                
-
-                targetInstance = NativeComLoader.CreateInstance(config.AssemblyPath, clsid, targetType);
-            }
-
-            _logger.LogInformation("Target instance created. Type: {Type}", targetType.FullName);
-
-            // ---------------------------------------------------------
-            // 2. SETUP METHOD INVOKER
-            // ---------------------------------------------------------
-
-            // Important: We must pass 'targetType' explicitly. 
-            // If targetInstance is a COM object, GetType() returns System.__ComObject, which breaks Reflection.
-            // You might need to add a constructor to MethodInvoker that accepts the Type explicitly.
-            _methodInvoker = new MethodInvoker(
-                targetInstance,
-                targetType,
-                loggerFactory.CreateLogger<MethodInvoker>());
-
-            // ---------------------------------------------------------
-            // 3. START IPC
-            // ---------------------------------------------------------
-            _logger.LogInformation("Connecting to pipe: {PipeName}", config.PipeName);
-            _channel = new NamedPipeServerChannel(config.PipeName);
+            _logger.LogInformation("Connecting to pipe: {PipeName}", _pipeName);
+            _channel = new NamedPipeServerChannel(_pipeName);
             _channel.Disconnected += OnChannelDisconnected;
 
             _logger.LogInformation("Pipe server ready. Sending READY signal.");
@@ -210,8 +205,26 @@ public class WorkerHost(WorkerConfiguration config, ILoggerFactory loggerFactory
 
         try
         {
+            // If we don't yet have an instance, create it now
+            _targetInstance ??= _loader.CreateInstance();
+            
+            
             // Invoke the method
-            result = _methodInvoker!.InvokeMethod(invocation);
+            // Important: We must pass 'targetType' explicitly. 
+            // If targetInstance is a COM object, GetType() returns System.__ComObject, which breaks Reflection.
+            // You might need to add a constructor to MethodInvoker that accepts the Type explicitly.
+            var methodInvoker = new MethodInvoker(
+                _targetInstance,
+                _loader.GetTargetType());
+
+            result = methodInvoker.InvokeMethod(invocation);
+
+            // If the method is dispose, we should clean up the target instance
+            if (invocation.MethodName == "Dispose" && invocation.ParameterTypeNames.Length == 0)
+            {
+                _logger.LogInformation("Disposing target instance as per Dispose method call");
+                _targetInstance = null;   
+            }
         }
         catch (Exception ex)
         {

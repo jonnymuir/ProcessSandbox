@@ -7,6 +7,7 @@ using ProcessSandbox.Pool;
 using ProcessSandbox.Proxy;
 using ProcessSandbox.Tests.TestImplementations;
 using Microsoft.Extensions.Logging.Abstractions;
+using Xunit.Abstractions;
 
 namespace ProcessSandbox.Tests.Integration;
 
@@ -45,12 +46,15 @@ public class WorkerRecyclingTests
             ProcessRecycleThreshold = 5
         };
 
-        var proxy = await ProcessProxy.CreateAsync<ITestService>(config, _loggerFactory);
+        var factory = await ProcessProxyFactory<ITestService>.CreateAsync(config, _loggerFactory);
 
         // Act - make more calls than the threshold
         for (int i = 0; i < 10; i++)
         {
-            proxy.Echo($"Call {i}");
+            await factory.UseProxyAsync(async proxy =>
+            {
+                proxy.Echo($"Call {i}");
+            });
         }
 
         // Assert - if we got here without errors, recycling worked
@@ -71,20 +75,36 @@ public class WorkerRecyclingTests
             MaxPoolSize = 1,
             ImplementationAssemblyPath = _testAssemblyPath,
             ImplementationTypeName = typeof(StatefulServiceImpl).FullName!,
-            ProcessRecycleThreshold = 3,
+            ProcessRecycleThreshold = 6, // Recycle after 6 calls - one echo + one dispose per UseProxyAsync
             RecycleCheckCalls = 1
         };
 
-        var proxy = await ProcessProxy.CreateAsync<ITestService>(config, _loggerFactory);
+        var factory = await ProcessProxyFactory<ITestService>.CreateAsync(config, _loggerFactory);
 
+        string result1 = string.Empty, result2 = string.Empty, result3 = string.Empty, result4 = string.Empty;
         // Act
-        var result1 = proxy.Echo("First"); // Call 1
-        var result2 = proxy.Echo("Second"); // Call 2
-        var result3 = proxy.Echo("Third"); // Call 3 - triggers recycle
-        
+        await factory.UseProxyAsync(async proxy =>
+        {
+            result1 = proxy.Echo("First"); // Call 1
+        });
+
+
+        await factory.UseProxyAsync(async proxy =>
+        {
+            result2 = proxy.Echo("Second"); // Call 2
+        });
+
+        await factory.UseProxyAsync(async proxy =>
+        {
+            result3 = proxy.Echo("Third"); // Call 3 - triggers recycle
+        });
+
         await Task.Delay(1000); // Give time for recycling
-        
-        var result4 = proxy.Echo("Fourth"); // Call 1 on new worker
+
+        await factory.UseProxyAsync(async proxy =>
+        {
+            result4 = proxy.Echo("Fourth"); // Call 1 on new worker
+        });
 
         // Assert
         Assert.Contains("call #1", result1);
