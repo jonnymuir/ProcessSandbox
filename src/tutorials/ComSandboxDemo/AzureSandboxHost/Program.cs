@@ -4,8 +4,10 @@ using ProcessSandbox.Proxy;
 using System.Text.Json;
 using System.Diagnostics;
 using System.Text;
-using Microsoft.Extensions.Logging; // Added for LogLevel
-using ProcessSandbox.Abstractions;  // Added for ICalculator
+using Microsoft.Extensions.Logging.EventLog;
+using Microsoft.Extensions.Logging;
+using ProcessSandbox.Abstractions; 
+using System.Runtime.InteropServices;
 
 var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
@@ -13,6 +15,17 @@ var app = builder.Build();
 var loggerFactory = LoggerFactory.Create(b =>
 {
     b.AddConsole();
+    // Add the EventLog provider
+    if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+    {
+        b.AddEventLog(new EventLogSettings
+        {
+            SourceName = "Application",
+            LogName = "Application"
+        });
+
+        b.AddFilter<Microsoft.Extensions.Logging.EventLog.EventLogLoggerProvider>(null, LogLevel.Information);
+    }
     b.SetMinimumLevel(LogLevel.Debug);
 });
 
@@ -430,7 +443,7 @@ app.MapPost("/configure", async (string engine, PoolSettingsModel settings) =>
     }
     catch (Exception ex)
     {
-        return Results.Json(new { detail = ex.Message }, statusCode: 500);
+        return Results.Json(new { detail = FlattenException(ex) }, statusCode: 500);
     }
 });
 

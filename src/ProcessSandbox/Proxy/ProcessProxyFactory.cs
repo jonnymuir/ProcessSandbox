@@ -30,6 +30,11 @@ public class ProcessProxyFactory<TInterface> : IDisposable where TInterface : cl
         this.logger = loggerFactory.CreateLogger<ProcessProxyDispatcher<TInterface>>();
         this.pool = new ProcessPool(config, loggerFactory);
         this.requestThrottle = new SemaphoreSlim(config.MaxPoolSize, config.MaxPoolSize);
+
+        if(string.IsNullOrEmpty(config.ImplementationTypeName))
+        {
+            this.config.ImplementationTypeName = typeof(TInterface).FullName!;
+        }
     }
 
     private async Task InitializeAsync()

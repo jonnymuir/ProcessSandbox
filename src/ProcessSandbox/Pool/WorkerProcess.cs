@@ -188,7 +188,9 @@ public class WorkerProcess(ProcessPoolConfiguration config, ILogger<WorkerProces
             };
 
             if (!_process.Start())
+            {
                 throw new WorkerStartupException("Failed to start worker process");
+            }
 
             _process.BeginOutputReadLine();
             _process.BeginErrorReadLine();
