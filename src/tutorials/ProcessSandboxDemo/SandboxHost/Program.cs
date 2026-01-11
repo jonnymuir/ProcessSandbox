@@ -2,6 +2,7 @@
 using ProcessSandbox.Pool;
 using LegacyLibrary.Contracts;
 using ProcessSandbox.Proxy;
+using System.Diagnostics;
 
 // 1. Setup minimal logging to see Sandbox internals
 using var loggerFactory = LoggerFactory.Create(builder =>
@@ -30,8 +31,8 @@ var config = new ProcessPoolConfiguration
 Console.WriteLine("--- 🛡️ Starting ProcessSandbox Monitor ---");
 Console.WriteLine($"Policy: Max Memory = {config.MaxMemoryMB}MB");
 
-// 3. Create the Proxy
-var proxy = await ProcessProxy.CreateAsync<IUnstableService>(config, loggerFactory);
+// 3. Create the Proxy Factory
+var factory = await ProcessProxyFactory<IUnstableService>.CreateAsync(config, loggerFactory);
 
 // 4. Run the Simulation Loop
 var iteration = 1;
@@ -42,10 +43,14 @@ while (true)
     Console.ForegroundColor = ConsoleColor.Cyan;
     Console.Write($"\n[Call #{iteration}] Sending request... ");
     
-    // This call happens in the worker process
-    proxy.LeakMemory(10); // Leak 10MB per call
+    var info = await factory.UseProxyAsync<ProcessInfo>(async proxy =>
+    {
+        // Leak Memory and Get Process Info will be sent to the same proxy in the prcess worker
+        proxy.LeakMemory(10); // Leak 10MB per call
 
-    var info = proxy.GetProcessInfo(); 
+        return proxy.GetProcessInfo(); 
+    });
+
     Console.ForegroundColor = ConsoleColor.Green;
     Console.WriteLine($"Success (Worker PID: {info.ProcessId}, Used: {info.MemoryMB}MB)");
     iteration++;

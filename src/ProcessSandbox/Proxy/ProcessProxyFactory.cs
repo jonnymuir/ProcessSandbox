@@ -9,17 +9,27 @@ namespace ProcessSandbox.Proxy;
 /// Factory for creating process proxies.
 /// </summary>
 /// <typeparam name="TInterface"></typeparam>
-public class ProcessProxyFactory<TInterface>:IDisposable where TInterface : class, IDisposable
+public class ProcessProxyFactory<TInterface> : IDisposable where TInterface : class, IDisposable
 {
     private readonly ProcessPool pool;
     private readonly ProcessPoolConfiguration config;
     private readonly ILogger<ProcessProxyDispatcher<TInterface>> logger;
 
+    /// <summary>
+    /// Maximum number of time we will try and call a worker
+    /// </summary>
+    private const int MAX_IPC_RETRY_ATTEMPTS = 10;
+        /// <summary>
+    /// Semaphore to throttle incoming requests to the pool.
+    /// </summary>
+    private readonly SemaphoreSlim requestThrottle;
+
     private ProcessProxyFactory(ProcessPoolConfiguration config, ILoggerFactory loggerFactory)
     {
         this.config = config;
         this.logger = loggerFactory.CreateLogger<ProcessProxyDispatcher<TInterface>>();
-        this.pool = new ProcessPool(config, loggerFactory); 
+        this.pool = new ProcessPool(config, loggerFactory);
+        this.requestThrottle = new SemaphoreSlim(config.MaxPoolSize, config.MaxPoolSize);
     }
 
     private async Task InitializeAsync()
@@ -42,24 +52,43 @@ public class ProcessProxyFactory<TInterface>:IDisposable where TInterface : clas
     }
 
     /// <summary>
+    /// Uses a process proxy to execute the given action. (No return version)
+    /// </summary>
+    /// <param name="action"></param>
+    /// <returns></returns>
+    /// <exception cref="NotImplementedException"></exception>
+    public async Task UseProxyAsync(Func<TInterface, Task> action)
+    {
+
+        await UseProxyAsync<object?>(async proxy =>
+        {
+            await action(proxy);
+            return null;
+        });  
+    }
+
+    /// <summary>
     /// Uses a process proxy to execute the given action.
     /// </summary>
     /// <param name="action"></param>
     /// <returns></returns>
-    public async Task UseProxyAsync(Func<TInterface, Task> action)
+    public async Task<ReturnT> UseProxyAsync<ReturnT>(Func<TInterface, Task<ReturnT>> action)
     {
-        for(int attempt = 1; attempt < 10; attempt++)
+        Exception lastException = new Exception("Use ProxyAsync max retry attempts exceeded");
+        
+        for (int attempt = 0; attempt < MAX_IPC_RETRY_ATTEMPTS; attempt++)
         {
 
-            await pool._requestThrottle.WaitAsync();
+            await requestThrottle.WaitAsync();
             var worker = await pool.GetAvailableWorkerAsync();
+
             try
             {
-                
+
                 var proxy = await CreateProxyAsync(worker);
-                await action(proxy);
+                var ret = await action(proxy);
                 proxy.Dispose();
-                
+
                 // Check if worker should be recycled
                 if (worker.ShouldRecycle())
                 {
@@ -74,9 +103,9 @@ public class ProcessProxyFactory<TInterface>:IDisposable where TInterface : clas
                     // All ok - return worker to pool
                     pool.ReturnWorker(worker);
                 }
-                break;
+                return ret;
             }
-            catch (IpcException)
+            catch (IpcException ex)
             {
                 // Remove failed worker
                 await pool.RemoveWorkerAsync(worker);
@@ -92,7 +121,9 @@ public class ProcessProxyFactory<TInterface>:IDisposable where TInterface : clas
                     throw;
                 }
 
-                await Task.Delay(attempt * 10).ConfigureAwait(false);
+                lastException = ex;
+
+                await Task.Delay((attempt+1) * 10).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -111,9 +142,11 @@ public class ProcessProxyFactory<TInterface>:IDisposable where TInterface : clas
             }
             finally
             {
-                pool._requestThrottle.Release();
+                requestThrottle.Release();
             }
-        }   
+        }
+
+        throw lastException;
     }
 
     /// <summary>

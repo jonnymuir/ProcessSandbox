@@ -105,7 +105,7 @@ var loggerFactory = LoggerFactory.Create(b =>
 });
 
 // 2. Create the Proxy Factory
-var proxy = await ProcessProxy.CreateAsync<ICalculator>(config, loggerFactory);
+using var factory = await ProcessProxyFactory<ICalculator>.CreateAsync(config, loggerFactory);
 
 app.MapGet("/", () => 
 {
@@ -202,8 +202,10 @@ app.MapPost("/calculate", async (HttpRequest request) =>
         int y = int.Parse(form["y"]!);
 
         // Call our 32-bit Native COM object via the Sandbox Proxy
-        var sum = proxy.Add(x, y);
-        var info = proxy.GetInfo();
+        var (sum, info) = await factory.UseProxyAsync(async proxy =>
+        {
+            return ( proxy.Add(x, y), proxy.GetInfo() );
+        });
 
         return Results.Ok(new { 
             Success = true, 

@@ -65,6 +65,28 @@ public class EndToEndTests : IDisposable
         Assert.Equal("Hello", result);
     }
 
+        /// <summary>
+    /// Tests basic method invocation through the proxy.
+    /// </summary>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    [Fact]
+    public async Task Proxy_BasicMethodInvocation_with_a_return()
+    {
+        // Arrange
+        var config = CreateTestConfiguration(typeof(TestServiceImpl));
+
+        // Act
+        var factory = await ProcessProxyFactory<ITestService>.CreateAsync(config, _loggerFactory);
+
+        string result = await factory.UseProxyAsync<string>(async proxy =>
+        {
+            return proxy.Echo("Hello");
+        });
+
+        // Assert
+        Assert.Equal("Hello", result);
+    }
+
     /// <summary>
     /// Tests basic method invocation through the proxy.
     /// </summary>

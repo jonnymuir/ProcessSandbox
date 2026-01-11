@@ -39,4 +39,12 @@ public class UnstableService : IUnstableService
         // Add to static list so GC cannot collect it
         _memoryHog.Add(data); 
     }
+
+    /// <summary>
+    /// Disposes the service.
+    /// </summary>
+    public void Dispose()
+    {
+        // Nothing to dispose
+    }
 }

@@ -29,7 +29,7 @@ public class WorkerProcess(ProcessPoolConfiguration config, ILogger<WorkerProces
     private bool _disposed;
     private int _recycleCount = 0;
     private DateTime _lastCheckTime = DateTime.UtcNow;
-    private readonly SemaphoreSlim _usageLock = new SemaphoreSlim(1, 1);
+    private readonly SemaphoreSlim _usageLock = new(1, 1);
 
     private TaskCompletionSource<bool> _workerReadyTcs = null!;
 
@@ -171,7 +171,7 @@ public class WorkerProcess(ProcessPoolConfiguration config, ILogger<WorkerProces
                     {
                         _workerReadyTcs.TrySetResult(true);
                     }
-                    else 
+                    else
                     {
                         logger.LogInformation("[Worker {WorkerId}] {Output}", _workerId, e.Data);
                     }

@@ -7,7 +7,7 @@ namespace Contracts;
 [ComImport]
 [Guid("E1234567-ABCD-1234-EF12-0123456789AB")] // Matches the IID in our C code
 [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-public interface ICalculator
+public interface ICalculator : IDisposable
 {
     /// <summary>
     /// Adds two integers

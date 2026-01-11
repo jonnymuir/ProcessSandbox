@@ -1,5 +1,6 @@
 using System;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -27,6 +28,8 @@ public class WorkerHost : IDisposable
     private bool _disposed;
     private readonly string _pipeName;
 
+    private bool isManagedAssembly = true;
+
     /// <summary>
     /// The worker configuration.
     /// </summary>
@@ -43,7 +46,6 @@ public class WorkerHost : IDisposable
         // Check if this is a Native COM activation request
         // We can detect this if a CLSID is provided in config, OR by checking the file header.
         // Here we use a Try/Catch approach on AssemblyName.GetAssemblyName for robustness.
-        bool isManagedAssembly = true;
         try
         {
             AssemblyName.GetAssemblyName(config.AssemblyPath);
@@ -207,8 +209,8 @@ public class WorkerHost : IDisposable
         {
             // If we don't yet have an instance, create it now
             _targetInstance ??= _loader.CreateInstance();
-            
-            
+
+
             // Invoke the method
             // Important: We must pass 'targetType' explicitly. 
             // If targetInstance is a COM object, GetType() returns System.__ComObject, which breaks Reflection.
@@ -222,8 +224,27 @@ public class WorkerHost : IDisposable
             // If the method is dispose, we should clean up the target instance
             if (invocation.MethodName == "Dispose" && invocation.ParameterTypeNames.Length == 0)
             {
+                if (_targetInstance != null && !isManagedAssembly)
+                {
+                    if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                    {
+                        // COM Object - don't bother with calling Dispose on the proxy, just release the COM object
+                        Marshal.ReleaseComObject(_targetInstance);
+                    }
+                    else
+                    {
+                        // Not COM - therefore call through to dispose on the proxy instance first
+                        result = methodInvoker.InvokeMethod(invocation);   
+                    }
+                }
+
                 _logger.LogInformation("Disposing target instance as per Dispose method call");
-                _targetInstance = null;   
+                _targetInstance = null;
+            }
+            else
+            {
+                result = methodInvoker.InvokeMethod(invocation);
+
             }
         }
         catch (Exception ex)

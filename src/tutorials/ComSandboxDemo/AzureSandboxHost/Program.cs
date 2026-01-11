@@ -41,7 +41,7 @@ var templateDelphi = new ProcessPoolConfiguration
 };
 
 // Global active proxy instance
-ICalculator? activeProxy = null;
+ProcessProxyFactory<ICalculator>? activeFactory = null;
 
 app.MapGet("/", () =>
 {
@@ -418,13 +418,13 @@ app.MapPost("/configure", async (string engine, PoolSettingsModel settings) =>
         };
 
         // 3. Re-Initialize the Proxy
-        // If there was an old one, dispose it (optional cleanup)
-        if (activeProxy is IDisposable oldProxy)
+        // If there was an old one, dispose it
+        if (activeFactory is IDisposable oldFactory)
         {
-            oldProxy.Dispose();
+            oldFactory.Dispose();
         }
 
-        activeProxy = await ProcessProxy.CreateAsync<ICalculator>(finalConfig, loggerFactory);
+        activeFactory = await ProcessProxyFactory<ICalculator>.CreateAsync(finalConfig, loggerFactory);
 
         return Results.Ok();
     }
@@ -440,7 +440,7 @@ app.MapPost("/configure", async (string engine, PoolSettingsModel settings) =>
 // ---------------------------------------------------------
 app.MapPost("/calculate", async (HttpRequest request) =>
 {
-    if (activeProxy == null)
+    if (activeFactory == null)
         return Results.Json(new { Success = false, detail = "Proxy not configured. Call /configure first." }, statusCode: 400);
 
     try
@@ -457,9 +457,12 @@ app.MapPost("/calculate", async (HttpRequest request) =>
         {
             try
             {
-                var sum = activeProxy.Add(x, y);
-                var info = activeProxy.GetInfo();
-                batchResults.Add(new { Result = sum, EngineJson = info });
+                await activeFactory.UseProxyAsync(async proxy =>
+                {
+                    var sum = proxy.Add(x, y);
+                    var info = proxy.GetInfo();
+                    batchResults.Add(new { Result = sum, EngineJson = info });
+                });
             }
             catch (Exception ex)
             {

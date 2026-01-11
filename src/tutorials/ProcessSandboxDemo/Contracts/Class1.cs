@@ -25,7 +25,7 @@ public class ProcessInfo
 /// <summary>
 /// A service that simulates instability by leaking memory
 /// </summary>
-public interface IUnstableService
+public interface IUnstableService : IDisposable
 {
     /// <summary>
     /// Returns the current process Info for debugging in the demo

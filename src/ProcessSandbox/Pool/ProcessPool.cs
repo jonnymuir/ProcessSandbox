@@ -17,10 +17,6 @@ public class ProcessPool : IDisposable
     private readonly ConcurrentBag<WorkerProcess> _availableWorkers;
     private readonly ConcurrentDictionary<string, WorkerProcess> _allWorkers;
     private readonly SemaphoreSlim _poolLock;
-    /// <summary>
-    /// Semaphore to throttle incoming requests to the pool.
-    /// </summary>
-    public readonly SemaphoreSlim _requestThrottle;
     private readonly SemaphoreSlim _startupThrottle;
     private bool _disposed;
 
@@ -53,8 +49,6 @@ public class ProcessPool : IDisposable
         _allWorkers = new ConcurrentDictionary<string, WorkerProcess>();
         _poolLock = new SemaphoreSlim(1, 1);
 
-        _requestThrottle = new SemaphoreSlim(_config.MaxPoolSize, _config.MaxPoolSize);
-
         _startupThrottle = new SemaphoreSlim(3, 3);
 
         _logger.LogInformation(
@@ -84,7 +78,6 @@ public class ProcessPool : IDisposable
                 await _poolLock.WaitAsync();
                 try
                 {
-                    _allWorkers.TryAdd(worker.WorkerId, worker);
                     ReturnWorker(worker);
                 }
                 finally
@@ -133,7 +126,6 @@ public class ProcessPool : IDisposable
                 if (_allWorkers.Count < _config.MaxPoolSize)
                 {
                     var newWorker = await CreateWorkerAsync();
-                    ReturnWorker(newWorker);
                     return newWorker;
                 }
             }
@@ -181,7 +173,7 @@ public class ProcessPool : IDisposable
     public void ReturnWorker(WorkerProcess worker)
     {
         _logger.LogDebug("Returning worker to the pool: {workerid}", worker.WorkerId);
-        
+
         if (worker.IsHealthy)
         {
             worker.FirstInSequence = true;

@@ -50,6 +50,7 @@ dotnet add package ProcessSandbox.Runner
 
 ```csharp
 using ProcessSandbox;
+using Microsoft.Extensions.Logging;
 
 // 1. Define your interface
 public interface ILegacyService
@@ -67,7 +68,7 @@ public class LegacyServiceImpl : ILegacyService
     }
 }
 
-// 3. Configure and create proxy
+// 3. Configuration
 var config = new ProcessPoolConfiguration
 {
     MaxPoolSize = 5,
@@ -76,10 +77,24 @@ var config = new ProcessPoolConfiguration
     WorkerType = "LegacyServiceImpl"
 };
 
-using var proxy = ProcessProxy.Create<ILegacyService>(config);
+// 4. Create a logger factory and configure it to use the Console provider
+using var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
 
-// 4. Use it like any interface - calls run in worker process
-string result = proxy.ProcessData("test data");
+// 5. Create the proxy factory
+using var factory = await ProcessProxyFactory<ILegacyService>.CreateAsync(config, loggerFactory);
+
+// 6. Use the factory to give you a scoped proxy
+string overallResult = await factory.UseProxyAsync<string>(async proxy =>
+{
+    // 7. Use it like any interface
+    //    Proxy methods will run in seperate process that has loaded MyLegacy.dll
+    //    Proxy object is stateful whist inside this code block
+    string result = proxy.ProcessData("test data");
+    string result2 = proxy.ProcessData("Some more test data");
+    return $"{result} {result2}";
+});
+
+Console.WriteLine(overallResult);
 ```
 
 ## Configuration
