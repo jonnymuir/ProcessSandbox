@@ -107,9 +107,9 @@ public class WorkerRecyclingTests
         });
 
         // Assert
-        Assert.Contains("call #2", result1);
-        Assert.Contains("call #4", result2);
-        Assert.Contains("call #6", result3);
-        Assert.Contains("call #2", result4); // New worker resets counter
+        Assert.Contains("call #1", result1);
+        Assert.Contains("call #2", result2);
+        Assert.Contains("call #3", result3);
+        Assert.Contains("call #1", result4); // New worker resets counter
     }
 }

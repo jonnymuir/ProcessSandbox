@@ -142,8 +142,13 @@ public class ProcessPoolConfiguration
     /// Gets or sets the number of seconds between recycle checks.
     /// </summary>
     public int RecycleCheckSeconds { get; set; } = 10;
-
     
+    /// <summary>
+    /// If true you get a new instance of each run, if false the same instance will be reused.
+    /// </summary>
+    public bool NewInstancePerProxy { get; set; } = true;
+
+
 
     /// <summary>
     /// Validates the configuration and throws if invalid.

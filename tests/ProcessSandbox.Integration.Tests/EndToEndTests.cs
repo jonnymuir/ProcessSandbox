@@ -65,7 +65,7 @@ public class EndToEndTests : IDisposable
         Assert.Equal("Hello", result);
     }
 
-        /// <summary>
+    /// <summary>
     /// Tests basic method invocation through the proxy.
     /// </summary>
     /// <returns>A task representing the asynchronous operation.</returns>
@@ -256,7 +256,7 @@ public class EndToEndTests : IDisposable
     /// </summary>
     /// <returns></returns>
     [Fact]
-    public async Task Proxy_Using_a_factory_with_IDispose_keeps_the_same_object_reference()
+    public async Task Proxy_keeps_the_same_object_reference_within_same_action_block()
     {
         // Arrange
         var config = CreateTestConfiguration(typeof(TestServiceImpl));
@@ -274,6 +274,60 @@ public class EndToEndTests : IDisposable
         // Assert
         Assert.Equal("Hello", result);
     }
+
+    /// <summary>
+    /// Tests using a factory to create the proxy.
+    /// </summary>
+    /// <returns></returns>
+    [Fact]
+    public async Task Proxy_doesnt_keeps_the_same_object_reference_between_action_blocks()
+    {
+        // Arrange
+        var config = CreateTestConfiguration(typeof(TestServiceImpl));
+
+        // Act
+        var factory = await ProcessProxyFactory<ITestService>.CreateAsync(config, _loggerFactory);
+
+        await factory.UseProxyAsync(async proxy => {
+            proxy.Set("Hello");
+        });
+
+        string result = await factory.UseProxyAsync(async proxy => {
+            return proxy.Read();
+        });
+
+        // Assert
+        Assert.Equal(string.Empty, result);
+    }
+
+    /// <summary>
+    /// Tests using a factory to create the proxy.
+    /// </summary>
+    /// <returns></returns>
+    [Fact]
+    public async Task Proxy_keeps_the_same_object_reference_between_action_blocks_if_new_instance_per_proxy_is_disabled()
+    {
+        // Arrange
+        var config = CreateTestConfiguration(typeof(TestServiceImpl));
+        config.MaxPoolSize = 1;
+        config.NewInstancePerProxy = false;
+
+        // Act
+        var factory = await ProcessProxyFactory<ITestService>.CreateAsync(config, _loggerFactory);
+
+        await factory.UseProxyAsync(async proxy => {
+            proxy.Set("Hello");
+        });
+
+        string result = await factory.UseProxyAsync(async proxy => {
+            return proxy.Read();
+        });
+
+        // Assert
+        Assert.Equal("Hello", result);
+    }
+
+
 
     /// <summary>
     /// Tests C# COM object with chained dependencies without registry.

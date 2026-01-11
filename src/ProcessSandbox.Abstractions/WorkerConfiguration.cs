@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using MessagePack;
 
 namespace ProcessSandbox.Abstractions;
@@ -50,6 +51,12 @@ public class WorkerConfiguration
     /// </summary>
     [Key(6)]
     public string ExtraComDependencies { get; set; } = string.Empty;
+
+    /// <summary>
+    /// If true you get a new instance of each run, if false the same instance will be reused.
+    /// </summary>
+    [Key(7)]
+    public bool NewInstancePerProxy {get; set; } = true;
 
     /// <summary>
     /// Validates the configuration.

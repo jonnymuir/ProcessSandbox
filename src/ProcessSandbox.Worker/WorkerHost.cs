@@ -30,6 +30,8 @@ public class WorkerHost : IDisposable
 
     private bool isManagedAssembly = true;
 
+    private readonly WorkerConfiguration _config;
+
     /// <summary>
     /// The worker configuration.
     /// </summary>
@@ -39,6 +41,7 @@ public class WorkerHost : IDisposable
     public WorkerHost(WorkerConfiguration config, ILoggerFactory loggerFactory)
     {
         this._logger = loggerFactory.CreateLogger<WorkerHost>();
+        this._config = config;
         // ---------------------------------------------------------
         // 1. DETERMINISTIC LOADING STRATEGY
         // ---------------------------------------------------------
@@ -203,7 +206,7 @@ public class WorkerHost : IDisposable
 
     private async Task HandleMethodInvocationAsync(MethodInvocationMessage invocation)
     {
-        MethodResultMessage result;
+        MethodResultMessage result = new();
 
         try
         {
@@ -219,32 +222,34 @@ public class WorkerHost : IDisposable
                 _targetInstance,
                 _loader.GetTargetType());
 
-            result = methodInvoker.InvokeMethod(invocation);
-
             // If the method is dispose, we should clean up the target instance
             if (invocation.MethodName == "Dispose" && invocation.ParameterTypeNames.Length == 0)
             {
                 if (_targetInstance != null && !isManagedAssembly)
                 {
-                    if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                    if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) && _config.NewInstancePerProxy)
                     {
                         // COM Object - don't bother with calling Dispose on the proxy, just release the COM object
                         Marshal.ReleaseComObject(_targetInstance);
                     }
-                    else
-                    {
-                        // Not COM - therefore call through to dispose on the proxy instance first
-                        result = methodInvoker.InvokeMethod(invocation);   
-                    }
+
+                    result = MethodResultMessage.CreateSuccess(invocation.CorrelationId, null, null);
+                }
+                else
+                {
+                    // Not COM - therefore call through to dispose on the proxy instance first
+                    result = methodInvoker.InvokeMethod(invocation);
                 }
 
-                _logger.LogInformation("Disposing target instance as per Dispose method call");
-                _targetInstance = null;
+                if (_config.NewInstancePerProxy)
+                {
+                    _logger.LogInformation("Disposing target instance as per Dispose method call");
+                    _targetInstance = null;
+                }
             }
             else
             {
                 result = methodInvoker.InvokeMethod(invocation);
-
             }
         }
         catch (Exception ex)

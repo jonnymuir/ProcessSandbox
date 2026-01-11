@@ -111,7 +111,8 @@ public class WorkerProcess(ProcessPoolConfiguration config, ILogger<WorkerProces
                     .Select(d => $"{d.DllPath}|{d.Clsid}")),
                 PipeName = pipeName,
                 VerboseLogging = config.VerboseWorkerLogging,
-                ParentProcessId = currentProcessId
+                ParentProcessId = currentProcessId,
+                NewInstancePerProxy = config.NewInstancePerProxy
             };
 
             // Serialize configuration to base64

@@ -135,6 +135,7 @@ app.MapGet("/", () =>
                             <div><label>Recycle Check (Calls)</label><input type='number' id='recycleCheckCalls' value='100' /></div>
                             <div><label>Recycle Check (Sec)</label><input type='number' id='recycleCheckSeconds' value='10' /></div>
                         </div>
+                        <div><label><input type='checkbox' id='newInstancePerProxy' checked style='width:auto' /> New Instance Per Proxy</label></div>
                         <label><input type='checkbox' id='verboseWorkerLogging' style='width:auto' /> Verbose Worker Logging</label>
                     </details>
 
@@ -278,7 +279,8 @@ app.MapGet("/", () =>
                     methodCallTimeoutSeconds: parseInt(document.getElementById('methodCallTimeout').value),
                     recycleCheckCalls: parseInt(document.getElementById('recycleCheckCalls').value),
                     recycleCheckSeconds: parseInt(document.getElementById('recycleCheckSeconds').value),
-                    verboseWorkerLogging: document.getElementById('verboseWorkerLogging').checked
+                    verboseWorkerLogging: document.getElementById('verboseWorkerLogging').checked,
+                    newInstancePerProxy: document.getElementById('newInstancePerProxy').checked
                 };
 
                 const response = await fetch('/configure?engine=' + engine, {
@@ -349,6 +351,11 @@ app.MapGet("/", () =>
             document.getElementById('calcForm').onsubmit = async (e) => {
                 e.preventDefault();
                 processStats = {}; globalErrors = []; completedIters = 0; sentIters = 0;
+                document.getElementById('process-list').innerHTML = '';
+                document.getElementById('error-list').innerHTML = '';
+                document.getElementById('stat-iter').innerText = '0/0';
+                document.getElementById('stat-time').innerText = '0.0s';
+                document.getElementById('error-box').style.display = 'none';
                 totalTarget = parseInt(document.getElementById('iters').value);
                 const batchSize = parseInt(document.getElementById('batchSize').value);
                 const concurrency = parseInt(document.getElementById('threads').value);
@@ -423,6 +430,7 @@ app.MapPost("/configure", async (string engine, PoolSettingsModel settings) =>
             VerboseWorkerLogging = settings.VerboseWorkerLogging,
             RecycleCheckCalls = settings.RecycleCheckCalls,
             RecycleCheckSeconds = settings.RecycleCheckSeconds,
+            NewInstancePerProxy = settings.NewInstancePerProxy,
 
             // TimeSpans
             MaxProcessLifetime = TimeSpan.FromSeconds(settings.MaxProcessLifetimeSeconds),
@@ -591,4 +599,8 @@ public class PoolSettingsModel
     /// Enable verbose logging in the worker processes
     /// </summary>
     public bool VerboseWorkerLogging { get; set; }
+    /// <summary>
+    /// If true you get a new instance of each run, if false the same instance will be reused.
+    /// </summary>
+    public bool NewInstancePerProxy { get; set; } = true;
 }

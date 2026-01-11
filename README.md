@@ -145,7 +145,9 @@ var config = new ProcessPoolConfiguration
         }
     ],
     MaxMemoryMB = 1024,  // well within 32-bit limit
-    MaxGdiHandles = 10000
+    MaxGdiHandles = 10000,
+    NewInstancePerProxy = true // Set to false if you don't want the instance to be cleared down on each run
+    
 };
 ```
 
