@@ -5,7 +5,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="ProcessSandbox.Abstractions" Version="1.0.6" />
+    <PackageReference Include="ProcessSandbox.Abstractions" Version="1.0.8" />
   </ItemGroup>
 
 </Project>

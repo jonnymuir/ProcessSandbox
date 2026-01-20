@@ -9,6 +9,7 @@ using ProcessSandbox.Tests.TestImplementations;
 using ProcessSandbox.Abstractions;
 using Microsoft.Extensions.Logging.Abstractions;
 using System.Reflection.Metadata.Ecma335;
+using System.IO.Pipelines;
 
 namespace ProcessSandbox.Tests.Integration;
 
@@ -295,6 +296,50 @@ public class EndToEndTests : IDisposable
         string result = await factory.UseProxyAsync(async proxy => {
             return proxy.Read();
         });
+
+        // Assert
+        Assert.Equal(string.Empty, result);
+    }
+
+    /// <summary>
+    /// Tests using a factory to create the proxy.
+    /// </summary>
+    /// <returns></returns>
+    [Fact]
+    public async Task Proxy_keeps_the_same_object_reference_within_same_lease()
+    {
+        // Arrange
+        var config = CreateTestConfiguration(typeof(TestServiceImpl));
+
+        // Act
+        var factory = await ProcessProxyFactory<ITestService>.CreateAsync(config, _loggerFactory);
+
+        using var lease = await factory.AcquireLeaseAsync();
+        lease.Set("Hello");
+        string result = lease.Read();
+
+        // Assert
+        Assert.Equal("Hello", result);
+    }
+
+    /// <summary>
+    /// Tests using a factory to create the proxy.
+    /// </summary>
+    /// <returns></returns>
+    [Fact]
+    public async Task Proxy_doesnt_keeps_the_same_object_reference_between_different_leases()
+    {
+        // Arrange
+        var config = CreateTestConfiguration(typeof(TestServiceImpl));
+
+        // Act
+        var factory = await ProcessProxyFactory<ITestService>.CreateAsync(config, _loggerFactory);
+
+        using var lease1 = await factory.AcquireLeaseAsync();
+        lease1.Set("Hello");
+
+        using var lease2 = await factory.AcquireLeaseAsync();
+        string result = lease2.Read();
 
         // Assert
         Assert.Equal(string.Empty, result);

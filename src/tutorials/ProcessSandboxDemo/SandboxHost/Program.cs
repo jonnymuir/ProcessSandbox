@@ -43,6 +43,7 @@ while (true)
     Console.ForegroundColor = ConsoleColor.Cyan;
     Console.Write($"\n[Call #{iteration}] Sending request... ");
     
+    // This shows the closure pattern:
     var info = await factory.UseProxyAsync<ProcessInfo>(async proxy =>
     {
         // Leak Memory and Get Process Info will be sent to the same proxy in the prcess worker
@@ -52,6 +53,13 @@ while (true)
     });
 
     Console.ForegroundColor = ConsoleColor.Green;
-    Console.WriteLine($"Success (Worker PID: {info.ProcessId}, Used: {info.MemoryMB}MB)");
+    Console.WriteLine($"Success from the proxy (Worker PID: {info.ProcessId}, Used: {info.MemoryMB}MB)");
+
+    // Or if you prefer the lease pattern - it is your responsibility to Dispose the lease:
+    using var lease = await factory.AcquireLeaseAsync();
+    lease.LeakMemory(10);
+    info = lease.GetProcessInfo();
+    Console.WriteLine($"Success from the lease (Worker PID: {info.ProcessId}, Used: {info.MemoryMB}MB)");
+
     iteration++;
 }

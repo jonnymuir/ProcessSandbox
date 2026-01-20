@@ -19,7 +19,7 @@ public class ProcessProxyFactory<TInterface> : IDisposable where TInterface : cl
     /// Maximum number of time we will try and call a worker
     /// </summary>
     private const int MAX_IPC_RETRY_ATTEMPTS = 10;
-        /// <summary>
+    /// <summary>
     /// Semaphore to throttle incoming requests to the pool.
     /// </summary>
     private readonly SemaphoreSlim requestThrottle;
@@ -31,7 +31,7 @@ public class ProcessProxyFactory<TInterface> : IDisposable where TInterface : cl
         this.pool = new ProcessPool(config, loggerFactory);
         this.requestThrottle = new SemaphoreSlim(config.MaxPoolSize, config.MaxPoolSize);
 
-        if(string.IsNullOrEmpty(config.ImplementationTypeName))
+        if (string.IsNullOrEmpty(config.ImplementationTypeName))
         {
             this.config.ImplementationTypeName = typeof(TInterface).FullName!;
         }
@@ -69,7 +69,7 @@ public class ProcessProxyFactory<TInterface> : IDisposable where TInterface : cl
         {
             await action(proxy);
             return null;
-        });  
+        });
     }
 
     /// <summary>
@@ -80,7 +80,7 @@ public class ProcessProxyFactory<TInterface> : IDisposable where TInterface : cl
     public async Task<ReturnT> UseProxyAsync<ReturnT>(Func<TInterface, Task<ReturnT>> action)
     {
         Exception lastException = new Exception("Use ProxyAsync max retry attempts exceeded");
-        
+
         for (int attempt = 0; attempt < MAX_IPC_RETRY_ATTEMPTS; attempt++)
         {
 
@@ -128,7 +128,7 @@ public class ProcessProxyFactory<TInterface> : IDisposable where TInterface : cl
 
                 lastException = ex;
 
-                await Task.Delay((attempt+1) * 10).ConfigureAwait(false);
+                await Task.Delay((attempt + 1) * 10).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -163,6 +163,32 @@ public class ProcessProxyFactory<TInterface> : IDisposable where TInterface : cl
         var factory = new ProcessProxyFactory<TInterface>(config, loggerFactory);
         await factory.InitializeAsync();
         return factory;
+    }
+
+    /// <summary>
+    /// Acquires a proxy lease. Must be used within a 'using' block.
+    /// </summary>
+    public async Task<TInterface> AcquireLeaseAsync()
+    {
+        await requestThrottle.WaitAsync();
+        try
+        {
+            var worker = await pool.GetAvailableWorkerAsync();
+            var proxy = await CreateProxyAsync(worker);
+
+            var dispatch =  (DispatchProxy.Create<TInterface, ProcessProxyLease<TInterface>>() as ProcessProxyLease<TInterface>)!.Initialize(
+                pool,
+                requestThrottle,
+                worker,
+                proxy);
+
+            return (dispatch as TInterface)!;
+        }
+        catch
+        {
+            requestThrottle.Release();
+            throw;
+        }
     }
 
     /// <summary>

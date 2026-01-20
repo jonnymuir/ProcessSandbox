@@ -95,6 +95,14 @@ string overallResult = await factory.UseProxyAsync<string>(async proxy =>
 });
 
 Console.WriteLine(overallResult);
+
+// Or if you prefer a lease pattern - you can do that too. Just remember to dispose it otherwise you'll hog the pool
+using var lease = await await factory.AcquireLeaseAsync();
+
+string leaseResult = $"{lease.ProcessData("test data")} {lease.ProcessData("Some more test data")}";
+
+Console.WriteLine(leaseResult);
+
 ```
 
 ## Configuration
